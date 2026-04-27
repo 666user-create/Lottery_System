@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>管理员登录页面</title>
+  <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/login.css">
+  <link rel="stylesheet" href="./css/toastr.min.css">
+  <style>
+    .server-msg{color:#dc3545;font-size:14px;margin-top:8px;min-height:1.2em}
+    label.field-error{color:#dc3545;font-size:13px;margin-top:4px;display:block}
+    .form-control.field-error{border-color:#dc3545}
+  </style>
+</head>
+<body class="login-page">
+<!-- 登录框区域 -->
+<div class="login-box row">
+  <div class="img-box col-sm-6  col-md-6 col-lg-7 col-xl-7">
+      <img src="./pic/login-left.png" class="img-fluid" alt srcset>
+  </div>
+  <div class="login-container col-sm-6 col-md-6 col-lg-5 col-xl-5">
+
+      <div class="tab-box">
+          <span class="active tab-span" data-form="loginForm">密码登录</span>
+          <span class="tab-span" data-form="codeForm">验证码登录</span>
+      </div>
+      <form id="loginForm">
+          <div class="form-group">
+              <label for="phoneNumber">手机号</label>
+              <input class="form-control" type="text" id="phoneNumber"
+                  name="phoneNumber"
+                  required placeholder="请输入手机号">
+          </div>
+          <div class="form-group">
+              <label for="password">密码</label>
+              <input class="form-control" type="password"
+                  id="password" name="password"
+                  required placeholder="请输入密码">
+          </div>
+          <button type="submit"
+              class="btn btn-primary btn-block login-btn">登录</button>
+          <div class="server-msg" id="pwdServerMsg"></div>
+      </form>
+      <!-- 验证码登录框 -->
+      <form id="codeForm" style="display: none;">
+          <div class="form-group">
+              <label for="loginMobile">手机号</label>
+              <input class="form-control" type="text" id="loginMobile"
+                     name="loginMobile"
+                     required placeholder="请输入手机号">
+          </div>
+          <div class="form-group">
+              <label for="verificationCode">验证码</label>
+              <div class="code-box">
+                  <input class="form-control" type="text"
+                         id="verificationCode" name="verificationCode"
+                         required placeholder="请输入验证码">
+                  <div class="btn btn-primary " id="getVerificationCode">获取验证码</div>
+              </div>
+          </div>
+          <button type="submit"
+              class="btn btn-primary btn-block login-btn">登录</button>
+          <div class="server-msg" id="codeServerMsg"></div>
+      </form>
+      <div class="register-link">
+          还没有账号，去<a href="register.html">注册管理员</a>
+      </div>
+  </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
+<script src="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="./js/toastr.min.js"></script>
+<script>
+  // toastr 若未加载成功，绝不能在这里抛错，否则后面 Tab、校验都不会绑定
+  if (window.toastr) {
+    toastr.options = { positionClass: 'toast-top-center', timeOut: 3000 };
+  }
+  function toastOk(msg) {
+    if (window.toastr) toastr.success(msg); else alert(msg);
+  }
+  function toastErr(msg) {
+    if (window.toastr) toastr.error(msg); else alert(msg);
+  }
+
+  function showPwdErr(msg) {
+    $('#pwdServerMsg').text(msg || '');
+  }
+  function showCodeErr(msg) {
+    $('#codeServerMsg').text(msg || '');
+  }
+
+  $("#loginForm").validate({
+    errorClass: 'field-error',
+    rules: {
+      phoneNumber: "required",
+      password: {
+        required: true,
+        minlength: 6
+      }
+    },
+    messages: {
+      phoneNumber: "请输入您的手机号",
+      password: {
+        required: "请输入密码",
+        minlength: "密码长度至少为6个字符"
+      }
+    },
+    submitHandler: function(form) {
+      var loginName = $('#phoneNumber').val();
+      var password = $('#password').val();
+      showPwdErr('');
+      // 发送AJAX请求
+      $.ajax({
+        url: '/user/password/login',
+        type: 'POST',
+        dataType: 'json',
+        contentType: 'application/json',
+        data: JSON.stringify({ loginName: loginName, password: password, mandatoryIdentity: "ADMIN"}),
+        success: function(result) {
+            if(result.code!=200){
+                var m = result.message || '登录失败';
+                showPwdErr(m);
+                alert('登录失败：' + m);
+            }else{
+                localStorage.setItem('token',result.data.token);
+                localStorage.setItem('user_identity',"ADMIN");
+                location.assign('admin.html');
+            }
+        },
+        error: function(xhr) {
+          var msg = '网络或服务异常';
+          try {
+            var body = xhr.responseJSON;
+            if (body && (body.message || body.msg)) msg = body.message || body.msg;
+          } catch (e) {}
+          showPwdErr(msg);
+          alert('登录失败：' + msg);
+        }
+      });
+      return false; // 阻止表单的默认提交行为
+    }
+  });
+
+  // tab 切换：用 $(this) 取 data-form，避免 e.target 不是带 data 的 span 时得到 #undefined 导致两个表单都被 hide 后无法 show
+  $('.tab-box .tab-span').on('click', function () {
+      var id = $(this).attr('data-form');
+      if (!id) return;
+      var formId = '#' + id;
+      $(this).addClass('active').siblings().removeClass('active');
+      $('#loginForm, #codeForm').hide();
+      $(formId).show();
+  });
+  // 获取验证码
+  var timer = null
+  $('#getVerificationCode').click(function(e){
+      console.log(e,$(this).text())
+      var txt = $(this).text()
+      var num = 60
+      if(txt.indexOf('获取')!==-1){
+          $('#getVerificationCode').text(num+'s')
+          getCode()
+          // 获取验证码接口
+          timer&&clearInterval(timer)
+          timer = setInterval(function(){
+              if(num>1){
+                  num--
+                  $('#getVerificationCode').text(num+'s')
+              }else{
+                  timer&&clearInterval(timer)
+                  $('#getVerificationCode').text('重新获取')
+              }
+          },1000)
+      }
+  })
+  function getCode(){
+      $.ajax({
+          url: '/user/verification-code/send',
+          type: 'POST',
+          dataType: 'json',
+          data:{ phoneNumber:$('#loginMobile').val() },
+          success: function(result) {
+              if (result.code != 200) {
+                  timer&&clearInterval(timer)
+                  $('#getVerificationCode').text('重新获取')
+                  toastErr(result.message || '验证码获取失败');
+              } else {
+                  toastOk('验证码发送成功');
+              }
+          },
+          error: function(xhr) {
+              timer&&clearInterval(timer)
+              $('#getVerificationCode').text('重新获取')
+              var msg = '验证码获取失败';
+              try {
+                var body = xhr.responseJSON;
+                if (body && (body.message || body.msg)) msg = body.message || body.msg;
+              } catch (e) {}
+              toastErr(msg);
+          }
+      });
+  }
+  // 验证码登录（errorClass 勿用 error，避免与校验 label 和页面提示区 class 冲突）
+  $("#codeForm").validate({
+      errorClass: 'field-error',
+      rules: {
+          loginMobile: "required",
+          verificationCode:"required",
+      },
+      messages: {
+          loginMobile: "请输入您的手机号",
+          verificationCode:  "请输入验证码",
+      },
+      submitHandler: function(form) {
+          var loginMobile = $('#loginMobile').val();
+          var verificationCode = $('#verificationCode').val();
+          showCodeErr('');
+          // 发送AJAX请求
+          $.ajax({
+              url: '/user/message/login',
+              type: 'POST',
+              dataType: 'json',
+              contentType: 'application/json',
+              data: JSON.stringify({
+                  loginMobile: loginMobile,
+                  verificationCode: verificationCode,
+                  mandatoryIdentity: "ADMIN"
+              }),
+              success: function(result) {
+                  if(result.code!=200){
+                      var m = result.message || '登录失败';
+                      showCodeErr(m);
+                      alert('登录失败：' + m);
+                  }else{
+                      localStorage.setItem('token',result.data.token);
+                      localStorage.setItem('user_identity',"ADMIN");
+                      location.assign('admin.html');
+                  }
+              },
+              error: function(xhr) {
+                var msg = '网络或服务异常';
+                try {
+                  var body = xhr.responseJSON;
+                  if (body && (body.message || body.msg)) msg = body.message || body.msg;
+                } catch (e) {}
+                showCodeErr(msg);
+                alert('登录失败：' + msg);
+              }
+          });
+          return false; // 阻止表单的默认提交行为
+      }
+  });
+</script>
+</body>
+</html>
