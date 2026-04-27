@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>注册页面</title>
+    <link rel="stylesheet"
+          href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css">
+    <script
+            src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script
+            src="https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
+    <link rel="stylesheet"
+          href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+
+        .register-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+
+        .register-container h2 {
+            font-weight: 600;
+            font-size: 32px;
+            letter-spacing: 1px;
+            color: #000000;
+            line-height: 50px;
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .show-password {
+            float: right;
+            cursor: pointer;
+            color: #008CBA;
+        }
+
+    </style>
+</head>
+<body>
+<div class="register-container">
+    <h2>填写注册信息</h2>
+    <form id="registerForm">
+        <div class="form-group">
+            <label for="name">姓名</label>
+            <input type="text" class="form-control" id="name"
+                   name="name" placeholder="请输入姓名" required>
+        </div>
+        <div class="form-group">
+            <label for="mail">邮箱</label>
+            <input type="email" class="form-control" id="mail"
+                   name="mail" placeholder="请输入邮箱" required>
+        </div>
+        <div class="form-group">
+            <label for="phoneNumber">手机号</label>
+            <input type="text" class="form-control" id="phoneNumber"
+                   name="phoneNumber" placeholder="请输入手机号" required>
+        </div>
+        <div class="form-group">
+            <label for="password">密码</label>
+            <input type="password" class="form-control" id="password"
+                   name="password" placeholder="请输入密码" required>
+        </div>
+        <button type="submit"
+                class="btn btn-primary btn-block">注册
+        </button>
+    </form>
+</div>
+
+<script>
+    var token = localStorage.getItem("token");
+    // 页面权限校验：如果是管理员通过后台注册新用户，必须校验登录状态
+    var params = new URLSearchParams(window.location.search);
+    var jumpList = params.get('jumpList');
+    /** 管理后台 iframe 内「注册用户」：仅普通用户，且不采集密码（可短信登录） */
+    var fromAdminPanel = jumpList === 'true';
+
+    if (jumpList === 'true') {
+        if (!token) {
+            alert("用户未登录，即将跳转到登录页！");
+            if (window.parent !== window) {
+                window.parent.location.href = 'blogin.html';
+            } else {
+                window.location.href = 'blogin.html';
+            }
+        }
+    }
+
+    if (fromAdminPanel) {
+        $('#password').closest('div.form-group').css('display', 'none');
+    }
+
+    // 使用jQuery Validate插件来验证表单
+    $("#registerForm").validate({
+        rules: {
+            name: "required",
+            mail: {
+                required: true,
+                email: true
+            },
+            phoneNumber: "required",
+            password: {
+                required: !fromAdminPanel,
+                minlength: 6
+            }
+        },
+        messages: {
+            name: "请输入您的姓名",
+            mail: "请输入有效的邮箱地址",
+            phoneNumber: "请输入您的手机号",
+            password: {
+                required: "请输入密码",
+                minlength: "密码长度至少为6个字符"
+            }
+        },
+        submitHandler: function (form) {
+            var formData = {
+                name: $('#name').val(),
+                mail: $('#mail').val(),
+                phoneNumber: $('#phoneNumber').val(),
+                password: fromAdminPanel ? '' : $('#password').val(),
+                identity: fromAdminPanel ? "NORMAL" : "ADMIN"
+            };
+
+            // 表单验证通过后，发送AJAX请求（必须用 /user/register + dataType:json，否则 result 可能是字符串，code 永远对不上）
+            $.ajax({
+                url: '/user/register',
+                type: 'POST',
+                dataType: 'json',
+                contentType: 'application/json',
+                headers: token ? { "token": token } : {},
+                data: JSON.stringify(formData),
+                success: function (result) {
+                    var code = result && result.code;
+                    if (code !== 200 && code !== '200') {
+                        alert('注册失败：' + (result && result.message ? result.message : ''));
+                        return;
+                    }
+                    if (jumpList === 'true') {
+                        window.parent.postMessage({ from: 'user-list.html', id: '#userList' }, '*');
+                    }
+                    alert('注册成功');
+                    setTimeout(function () {
+                        if (jumpList === 'true') {
+                            if (window.parent === window) {
+                                window.location.href = 'user-list.html';
+                            }
+                            return;
+                        }
+                        window.location.href = 'blogin.html';
+                    }, 0);
+
+                },
+                error: function (xhr) {
+                    var msg = '网络或服务异常';
+                    try {
+                        var body = xhr.responseJSON;
+                        if (body && (body.message || body.msg)) msg = body.message || body.msg;
+                    } catch (e) {
+                    }
+                    alert('注册失败：' + msg);
+                }
+            });
+            return false; // 阻止表单默认提交行为
+        }
+    });
+</script>
+</body>
+</html>
