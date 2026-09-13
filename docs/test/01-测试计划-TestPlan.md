@@ -129,7 +129,7 @@
 | 手动 Web UI | 浏览器（Chrome/Edge） | 覆盖 P0/P1 关键用户旅程：注册→登录→建活动→配奖品→抽奖→AI客服→工单 | 真实执行，记录截图与痕迹 |
 | Web UI 自动化 | Selenium WebDriver + Java | 核心 5 条旅程脚本化，可重复回归 | 真实执行 |
 | 接口功能测试 | Postman / curl | 全部接口：正向、反向、边界、权限矩阵 | 真实执行（curl） |
-| 接口自动化 | **Python + pytest + requests** | 147 条用例，断业务码与数据正确性，可纳入 CI | 真实执行（146 passed / 1 xfailed） |
+| 接口自动化 | **Python + pytest + requests** | 152 条用例，断业务码与数据正确性，可纳入 CI | 真实执行（151 passed / 1 xfailed） |
 | 性能测试 | **JMeter 5.6.3 命令行** | 登录/活动列表/中奖记录 3 场景（3500 请求），产出 result.jtl + HTML Dashboard | 真实执行（0 错误 / 175.6 次每秒） |
 | 安全测试 | 手动 + 脚本 | 越权、注入（SQL/提示词）、密钥泄露审查、暴力枚举 | 部分真实执行 |
 
@@ -200,7 +200,7 @@
 | T2 | 接口功能测试（Postman/curl） | 1 天 |
 | T3 | 手动 Web UI 测试 | 1 天 |
 | T4 | Selenium UI 自动化 + 回归 | 1 天 |
-| T5 | pytest 接口自动化执行（147 条） | 0.5 天 |
+| T5 | pytest 接口自动化执行（152 条） | 0.5 天 |
 | T6 | JMeter 性能测试（脚本交付，执行视环境） | 0.5 天 |
 | T7 | 安全测试（基础） | 0.5 天 |
 | T8 | 缺陷修复与回归、总结报告 | 1 天 |
@@ -234,7 +234,7 @@
 | D9 | Postman Collection | `docs/test/artifacts/postman/` |
 | D10 | JMeter 脚本 | `docs/test/artifacts/jmeter/` |
 | D11 | Selenium 脚本 | `docs/test/artifacts/selenium/` |
-| D12 | **pytest 接口自动化测试代码（147 条）** | `tests/api/`（项目内，真实可运行） |
+| D12 | **pytest 接口自动化测试代码（152 条）** | `tests/api/`（项目内，真实可运行） |
 
 ---
 

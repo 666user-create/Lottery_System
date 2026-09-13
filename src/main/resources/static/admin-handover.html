@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>转人工工单管理</title>
+  <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body { background: #f5f6fa; padding: 20px; }
+    .card { border-radius: 10px; }
+    .status-tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; color: #fff; }
+    .status-PENDING { background: #ff9800; }
+    .status-PROCESSING { background: #2196f3; }
+    .status-RESOLVED { background: #4caf50; }
+    .status-CLOSED { background: #9e9e9e; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3 class="mb-3">📋 转人工工单管理</h3>
+    <div class="card p-3 mb-3">
+      <div class="btn-group" role="group">
+        <button class="btn btn-outline-primary status-btn active" data-status="">全部</button>
+        <button class="btn btn-outline-warning status-btn" data-status="PENDING">待处理</button>
+        <button class="btn btn-outline-info status-btn" data-status="PROCESSING">处理中</button>
+        <button class="btn btn-outline-success status-btn" data-status="RESOLVED">已解决</button>
+        <button class="btn btn-outline-secondary status-btn" data-status="CLOSED">已关闭</button>
+      </div>
+    </div>
+    <div class="card p-3">
+      <table class="table table-hover table-sm">
+        <thead>
+          <tr>
+            <th>ID</th><th>用户ID</th><th>会话</th><th>问题</th>
+            <th>状态</th><th>处理人</th><th>备注</th><th>创建时间</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let currentStatus = '';
+
+    // 页面加载：先尝试拿 token(从 localStorage，登录接口存过)，拿不到则跳转登录页
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('请先登录后再打开本页面');
+      // 修复 BUG-006：原实现仅 alert 未中断流程，导致随后 loadList() 请求 401
+      // 再弹第二个"加载失败"弹窗；现改为跳转登录页并中断后续初始化
+      location.assign('blogin.html');
+    }
+
+    function loadList() {
+      const url = `/api/handover/list?status=${currentStatus}&page=1&pageSize=50`;
+      fetch(url, { headers: { 'token': token || '' } })
+        .then(r => r.json())
+        .then(res => {
+          // 修复 BUG-006：成功码为 200（CommonResult.success），原判断 !== 0 会把成功当失败
+          if (res.code !== 200) throw new Error(res.message);
+          render(res.data.list || []);
+        })
+        .catch(e => alert('加载失败: ' + e.message));
+    }
+
+    function render(list) {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = list.map(item => `
+        <tr>
+          <td>${item.id}</td>
+          <td>${item.userId || '-'}</td>
+          <td>${item.sessionId || '-'}</td>
+          <td style="max-width:200px;">${item.question || '-'}</td>
+          <td><span class="status-tag status-${item.status}">${item.status}</span></td>
+          <td>${item.handler || '-'}</td>
+          <td>${item.remark || '-'}</td>
+          <td>${item.gmtCreate || '-'}</td>
+          <td>
+            <button class="btn btn-sm btn-info" onclick="process(${item.id},'PROCESSING')">处理中</button>
+            <button class="btn btn-sm btn-success" onclick="process(${item.id},'RESOLVED')">已解决</button>
+            <button class="btn btn-sm btn-secondary" onclick="process(${item.id},'CLOSED')">关闭</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    function process(id, status) {
+      const remark = prompt('请填写处理备注:');
+      fetch('/api/handover/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': token || '' },
+        body: JSON.stringify({ id: id, status: status, remark: remark || '', handler: '管理员' })
+      })
+        .then(r => r.json())
+        .then(res => {
+          // 修复 BUG-006：成功码为 200（CommonResult.success），原判断 !== 0 会把成功当失败
+          if (res.code !== 200) throw new Error(res.message);
+          alert('已更新');
+          loadList();
+        })
+        .catch(e => alert('操作失败: ' + e.message));
+    }
+
+    // 状态筛选按钮
+    document.querySelectorAll('.status-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStatus = btn.dataset.status;
+        loadList();
+      });
+    });
+
+    // 修复 BUG-006：仅在有 token 时加载，避免未登录时产生第二个错误弹窗
+    if (token) {
+      loadList();
+    }
+  </script>
+</body>
+</html>

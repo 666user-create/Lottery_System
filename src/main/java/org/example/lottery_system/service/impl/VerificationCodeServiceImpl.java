@@ -41,8 +41,14 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
             throw new ServiceException(ServiceErrorCodeConstants.PHONE_ERROR);
         }
         UserDO user = userMapper.selectByPhoneNumber(new Encrypt(phoneNumber));
+        // 修复 BUG-005：区分「手机号未注册」(118) 与「已注册但身份缺失」(114)
+        // 原实现将两种情况统一返回 114"该手机号未登记为管理员账号"，
+        // 实测已注册普通用户可正常发送（功能正常），问题在于未注册场景的文案误导
         if (user == null) {
-            throw new ServiceException(ServiceErrorCodeConstants.PHONE_ERROR);
+            throw new ServiceException(ServiceErrorCodeConstants.PHONE_NOT_REGISTERED);
+        }
+        if (!StringUtils.hasText(user.getIdentity())) {
+            throw new ServiceException(ServiceErrorCodeConstants.PHONE_NOT_ADMIN);
         }
         if (redisUtil.hasKey(SMS_SEND_COOLDOWN_PREFIX + phoneNumber)) {
             throw new ServiceException(ServiceErrorCodeConstants.SMS_SEND_TOO_FREQUENT);

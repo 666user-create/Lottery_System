@@ -37,8 +37,12 @@ DB = {
 
 # 白名单：表 → 删除条件
 # 统一使用 ASCII 前缀 qa_auto_ / QA_AUTO_，规避中文参数经 mysql CLI 传参的编码风险
+# 注意 human_handover 需额外按 user_id 关联清理：
+#   UI（chat.html）触发的转人工，session_id 由前端随机生成（sess-<timestamp>-<rand>），
+#   无法用前缀识别；因此补充「由测试账号创建」的条件（2026-09-13 实测发现该漏网场景）
 WHITELIST = {
-    "human_handover": "session_id LIKE 'qa\\_auto\\_%'",
+    "human_handover": ("session_id LIKE 'qa\\_auto\\_%' "
+                       "OR user_id IN (SELECT id FROM user WHERE email LIKE 'qa\\_auto\\_%')"),
     "user": "email LIKE 'qa\\_auto\\_%'",
     "prize": "name LIKE 'qa\\_auto\\_%' OR name LIKE 'QA\\_AUTO\\_%'",
     "activity": "activity_name LIKE 'qa\\_auto\\_%' OR activity_name LIKE 'QA\\_AUTO\\_%'",
@@ -73,11 +77,27 @@ def _run_mysql(sql: str, executable: str = MYSQL_BIN) -> tuple:
 
 
 def _run_mysqldump(table: str, where: str, out_file: str) -> bool:
+    """
+    按主键列表备份待删记录。
+
+    为什么不用原 WHERE 条件直接传给 mysqldump（2026-09-13 踩坑）：
+      白名单增强后 human_handover 条件含子查询与多层单引号
+      （`session_id LIKE 'qa\_auto\_%' OR user_id IN (SELECT ... LIKE 'qa\_auto\_%')`），
+      经 CreateProcess 传参时引号被截断 → mysqldump 报 SQL 语法错 → 备份 0 字节。
+      改为「先查主键 → 用 id IN (...) 备份」：条件纯数字，无引号/子查询风险。
+    """
+    # 1) 查出待删主键
+    code, ids_text = _run_mysql(f"SELECT id FROM {table} WHERE {where};")
+    id_list = [x.strip() for x in ids_text.splitlines() if x.strip().isdigit()]
+    if not id_list:
+        return True  # 无数据，无需备份
+    simple_where = f"id IN ({','.join(id_list)})"
+
     cmd = [MYSQLDUMP_BIN,
            f"--host={DB['host']}", f"--port={DB['port']}",
            f"--user={DB['user']}", f"--password={DB['password']}",
            "--no-create-info", "--skip-extended-insert",
-           DB["database"], table, f"--where={where}"]
+           DB["database"], table, f"--where={simple_where}"]
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         print(f"    [备份失败] {table}: {proc.stderr.strip()[:200]}")

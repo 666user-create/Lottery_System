@@ -24,7 +24,7 @@
 
 | 交付物 | 路径 | 状态 |
 |---|---|---|
-| **接口自动化（Python + pytest + requests）** | `tests/api/`（14 文件 / **147 条用例**） | ✅ **146 passed / 1 xfailed**（25.28s） |
+| **接口自动化（Python + pytest + requests）** | `tests/api/`（14 文件 / **152 条用例**） | ✅ **151 passed / 1 xfailed**（25.28s） |
 | UI 自动化（Selenium 4 + Java + Headless Chrome） | `docs/test/artifacts/selenium/` | ✅ 6/6 通过 |
 | Postman Collection（调试） | `docs/test/artifacts/postman/lottery_system.postman_collection.json` | ✅ 27 请求 / 7 分组 |
 | JMeter 5.6.3 脚本 + 结果 + HTML Dashboard | `docs/test/artifacts/jmeter/` · `tests/jmeter/` | ✅ 已真实执行（3500 请求 / 0 错误） |
@@ -37,7 +37,7 @@
 
 | 指标 | 结果 |
 |---|---|
-| **接口自动化（pytest）** | **147 条：146 passed / 1 xfailed** |
+| **接口自动化（pytest）** | **152 条：151 passed / 1 xfailed** |
 | UI 自动化（Selenium） | 6/6 通过 |
 | 安全测试 | 通过：SQL 注入 4 载荷全阻断、身份提权全降级、401/403 权限矩阵有效 |
 | 并发测试 | 通过：并发注册无竞态、并发工单无丢失/无重复 id |
@@ -65,7 +65,7 @@ $env:MAVEN_OPTS="-Xmx320m -XX:MaxMetaspaceSize=128m"     # 低内存环境建议
 cd tests\api
 python -m pip install -r requirements.txt      # pytest 8.3.4 + requests 2.32.3
 
-python -m pytest -v                             # 全量 147 条
+python -m pytest -v                             # 全量 152 条
 python -m pytest -m smoke -v                    # 冒烟
 python -m pytest -m keypath -v                  # 关键路径（第③步 79 条）
 python -m pytest -m boundary -v                 # 边界与异常（第④步 68 条）

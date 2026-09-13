@@ -20,6 +20,10 @@ public interface ServiceErrorCodeConstants {
     ErrorCode SMS_SEND_TOO_FREQUENT = new ErrorCode(115, "发送过于频繁，请稍后再试");
     ErrorCode SMS_SEND_HOUR_LIMIT = new ErrorCode(116, "验证码发送次数已达上限，请一小时后再试");
     ErrorCode SMS_SEND_FAILED = new ErrorCode(117, "短信发送失败，请稍后重试");
+    // 修复 BUG-005：手机号未注册需独立错误码
+    // 原实现复用 114（"该手机号未登记为管理员账号"），对"未注册"场景文案误导；
+    // 实测已注册普通用户可正常发码（功能无缺陷），故仅新增语义明确的错误码
+    ErrorCode PHONE_NOT_REGISTERED = new ErrorCode(118, "该手机号尚未注册，请先注册后再登录");
     //活动模块错误
     ErrorCode CREATE_ACTIVITY_EMPTY = new ErrorCode(200, "创建活动参数为空");
     ErrorCode ACTIVITY_USER_ERROR = new ErrorCode(201, "活动关联人员异常");

@@ -81,6 +81,8 @@ class Code:
     SMS_SEND_TOO_FREQUENT = 115
     SMS_SEND_HOUR_LIMIT = 116
     SMS_SEND_FAILED = 117
+    # 修复 BUG-005 后新增：手机号未注册（区别于 114「未登记为管理员账号」）
+    PHONE_NOT_REGISTERED = 118
     # 活动（200-206；注意 202 与控制器错误码冲突）
     CREATE_ACTIVITY_EMPTY = 200
     ACTIVITY_USER_ERROR = 201
