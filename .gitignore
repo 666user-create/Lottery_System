@@ -51,3 +51,7 @@ docs/test/artifacts/screenshots/
 
 # 测试数据清理备份（db_cleanup.py --apply 自动生成，跑一次就有）
 docs/test/backup/
+# JMeter 运行日志（根目录，跑一次就有）
+jmeter.log
+*.log
+logs/

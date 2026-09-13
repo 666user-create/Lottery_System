@@ -38,8 +38,8 @@
 | 编号 | 资料名称 | 来源 |
 |---|---|---|
 | [R1] | 需求规格说明（功能需求，来自代码实现与验收清单） | 项目组 |
-| [R2] | 《AI客服RAG实现指南.md》 | docs/ |
-| [R3] | 《AI客服-验收清单.md》 | docs/ |
+| [R2] | 《AI客服RAG实现指南.md》 | docs/design/ |
+| [R3] | 《AI客服-验收清单.md》 | docs/design/ |
 | [R4] | application.properties（环境配置） | src/main/resources/ |
 | [R5] | 接口文档（依据 Controller 层实现整理） | 本套件 附录A |
 
