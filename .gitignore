@@ -31,3 +31,23 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### QA 生成物（跑一次就有，不入库；生成命令见 tests/api/README.md 与 docs/test/README.md）###
+# JVM 崩溃日志
+hs_err_pid*.log
+replay_pid*.log
+# Python 测试
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+# 测试报告（allure / pytest-html）
+tests/api/reports/
+# JMeter 结果与报告
+tests/jmeter/*.jtl
+tests/jmeter/report/
+# UI 自动化截图（Selenium 每次运行生成）
+docs/test/artifacts/screenshots/
+
+# 测试数据清理备份（db_cleanup.py --apply 自动生成，跑一次就有）
+docs/test/backup/

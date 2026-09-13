@@ -47,7 +47,7 @@ public class ActivityController {
     }
 
     @GetMapping("/find-list")
-    public CommonResult<FindActivityListResult> findActivityList(PageParam param) {
+    public CommonResult<FindActivityListResult> findActivityList(@Validated PageParam param) {
         logger.info("findActivityList: {}",
                 JacksonUtil.writeValueAsString(param));
         return CommonResult.success(convertToFindActivityListResult(activityService.findActivityList(param)));

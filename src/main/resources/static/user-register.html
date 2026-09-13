@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册 - 抽奖系统</title>
+    <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #fff; margin: 0; padding: 0; }
+        .register-container { max-width: 600px; margin: 50px auto; padding: 20px; background-color: #fff; border-radius: 5px; }
+        .register-container h2 { font-weight: 600; font-size: 28px; letter-spacing: 1px; color: #000; line-height: 50px; text-align: center; margin-bottom: 40px; }
+        .back-link { text-align: center; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="register-container">
+    <h2>用户注册</h2>
+    <form id="registerForm">
+        <div class="form-group">
+            <label for="name">姓名</label>
+            <input type="text" class="form-control" id="name" name="name" placeholder="请输入姓名" required>
+        </div>
+        <div class="form-group">
+            <label for="mail">邮箱</label>
+            <input type="email" class="form-control" id="mail" name="mail" placeholder="请输入邮箱" required>
+        </div>
+        <div class="form-group">
+            <label for="phoneNumber">手机号</label>
+            <input type="text" class="form-control" id="phoneNumber" name="phoneNumber" placeholder="请输入手机号" required>
+        </div>
+        <div class="form-group">
+            <label for="password">密码 <small class="text-muted">（选填，不填只能短信登录）</small></label>
+            <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码（至少6位）">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">注册</button>
+    </form>
+    <div class="back-link">
+        已有账号？<a href="user-login.html">去登录</a>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
+<script>
+    $("#registerForm").validate({
+        rules: {
+            name: "required",
+            mail: { required: true, email: true },
+            phoneNumber: "required",
+            password: { minlength: 6 }
+        },
+        messages: {
+            name: "请输入您的姓名",
+            mail: "请输入有效的邮箱地址",
+            phoneNumber: "请输入您的手机号",
+            password: { minlength: "密码长度至少为6个字符" }
+        },
+        submitHandler: function(form) {
+            var formData = {
+                name: $('#name').val(),
+                mail: $('#mail').val(),
+                phoneNumber: $('#phoneNumber').val(),
+                password: $('#password').val() || '',
+                identity: "NORMAL"
+            };
+            $.ajax({
+                url: '/user/register',
+                type: 'POST',
+                dataType: 'json',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function(result) {
+                    if (result && result.code !== 200) {
+                        alert('注册失败：' + (result.message || ''));
+                        return;
+                    }
+                    alert('注册成功！请登录');
+                    window.location.href = 'user-login.html';
+                },
+                error: function(xhr) {
+                    var msg = '网络或服务异常';
+                    try { var body = xhr.responseJSON; if (body && body.message) msg = body.message; } catch (e) {}
+                    alert('注册失败：' + msg);
+                }
+            });
+            return false;
+        }
+    });
+</script>
+</body>
+</html>

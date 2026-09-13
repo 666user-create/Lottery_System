@@ -49,7 +49,7 @@ public class PrizeController {
     }
     //查询所有奖品
     @GetMapping("/find-list")
-    public CommonResult<FindPrizeListResult> findPrizeListResult(PageParam param){
+    public CommonResult<FindPrizeListResult> findPrizeListResult(@Validated PageParam param){
         logger.info("查询奖品:{}", JacksonUtil.writeValueAsString(param));
         PageListDTO<PrizeDTO> pageListDTO = prizeService.findPrizeList(param);
         return CommonResult.success(convertToFindPrizeListResult(pageListDTO));

@@ -1,0 +1,9 @@
+# 抽奖系统接口自动化测试 — Python 栈依赖
+# 执行：python -m pip install -r requirements.txt
+# 本工程仅使用业主现役框架，不引入额外测试框架。
+
+pytest==8.3.4
+requests==2.32.3
+
+# 可选：报告与可视化（已在本机安装）
+allure-pytest==2.13.5

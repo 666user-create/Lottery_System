@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动大厅 - 抽奖系统</title>
+    <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <link rel="stylesheet" href="./css/toastr.min.css?v=20260913">
+    <style>
+        .container { margin-top: 30px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header h3 { margin: 0; }
+        .user-info { color: #666; font-size: 14px; }
+        .user-info span { margin-right: 15px; }
+        .tab-nav { margin-bottom: 20px; }
+        .tab-nav .nav-link { cursor: pointer; }
+        .activity-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: box-shadow 0.2s; }
+        .activity-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+        .activity-card h5 { color: #333; margin-bottom: 8px; }
+        .activity-card .desc { color: #666; font-size: 14px; }
+        .activity-card .meta { margin-top: 8px; font-size: 13px; color: #999; }
+        .activity-card .meta .badge { font-size: 12px; }
+        .prize-item { border-left: 3px solid #007bff; padding-left: 12px; margin: 8px 0; }
+        .prize-item.first { border-left-color: #dc3545; }
+        .prize-item.second { border-left-color: #fd7e14; }
+        .prize-item.third { border-left-color: #28a745; }
+        .prize-item .tier-badge { font-size: 11px; padding: 2px 6px; }
+        .record-table { font-size: 14px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .btn-sm-action { padding: 2px 10px; font-size: 12px; }
+        /* 小东助手气泡 */
+        #xiaoDongFab { position: fixed; bottom: 30px; right: 30px; z-index: 9999; }
+        #xiaoDongFab .fab-btn { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 16px rgba(102,126,234,0.4); transition: transform 0.2s; }
+        #xiaoDongFab .fab-btn:hover { transform: scale(1.1); }
+        #xiaoDongChat { position: fixed; bottom: 96px; right: 30px; z-index: 9998; width: 380px; height: 500px; background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); display: none; flex-direction: column; overflow: hidden; }
+        #xiaoDongChat .chat-header { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; padding: 12px 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        #xiaoDongChat .chat-header .close-btn { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
+        #xiaoDongChat .chat-messages { flex: 1; overflow-y: auto; padding: 12px; background: #f8f9fa; }
+        #xiaoDongChat .chat-messages .msg { margin-bottom: 10px; max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+        #xiaoDongChat .chat-messages .msg.user { background: #667eea; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
+        #xiaoDongChat .chat-messages .msg.bot { background: #fff; color: #333; margin-right: auto; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        #xiaoDongChat .chat-messages .msg.bot .typing { display: inline-block; width: 6px; height: 6px; background: #999; border-radius: 50%; animation: blink 1.4s infinite; margin: 0 2px; }
+        #xiaoDongChat .chat-messages .msg.bot .typing:nth-child(2) { animation-delay: 0.2s; }
+        #xiaoDongChat .chat-messages .msg.bot .typing:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+        #xiaoDongChat .chat-input { display: flex; padding: 10px; border-top: 1px solid #eee; }
+        #xiaoDongChat .chat-input input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; }
+        #xiaoDongChat .chat-input button { margin-left: 8px; border: none; background: #667eea; color: #fff; border-radius: 50%; width: 38px; height: 38px; cursor: pointer; font-size: 16px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h3>🎉 活动大厅</h3>
+        <div class="user-info">
+            <span>👤 <strong id="userName">---</strong></span>
+            <button class="btn btn-outline-danger btn-sm" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs tab-nav" id="mainTab" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" data-toggle="tab" href="#activityPanel">📋 活动列表</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#myWinPanel">🏆 我的中奖</a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- 活动列表 -->
+        <div class="tab-pane fade show active" id="activityPanel">
+            <div id="activityList"></div>
+            <div id="activityLoading" style="text-align:center;padding:40px;color:#999;">加载中...</div>
+        </div>
+        <!-- 我的中奖 -->
+        <div class="tab-pane fade" id="myWinPanel">
+            <div id="myWinList"></div>
+            <div id="myWinLoading" style="text-align:center;padding:40px;color:#999;display:none;">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- 小东助手 -->
+<div id="xiaoDongFab">
+    <button class="fab-btn" onclick="toggleXiaoDong()" title="小东助手">🤖</button>
+</div>
+<div id="xiaoDongChat">
+    <div class="chat-header">
+        <span>🤖 小东助手</span>
+        <button class="close-btn" onclick="toggleXiaoDong()">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+        <div class="msg bot">你好！我是小东 🎉<br>你可以问我：<br>• 有哪些进行中的活动？<br>• 奖品有哪些？<br>• 查看用户列表<br>• 某活动的中奖记录</div>
+    </div>
+    <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendMessage()">
+        <button onclick="sendMessage()">➤</button>
+    </div>
+</div>
+
+<!-- 活动详情 Modal -->
+<div class="modal fade" id="activityDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">活动详情</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 小东助手 -->
+<div id="xiaoDongFab">
+    <button class="fab-btn" onclick="toggleXiaoDong()" title="小东助手">🤖</button>
+</div>
+<div id="xiaoDongChat">
+    <div class="chat-header">
+        <span>🤖 小东助手</span>
+        <button class="close-btn" onclick="toggleXiaoDong()">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+        <div class="msg bot">你好！我是小东 🎉<br>你可以问我：<br>• 有哪些进行中的活动？<br>• 奖品有哪些？<br>• 查看用户列表<br>• 某活动的中奖记录</div>
+    </div>
+    <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendMessage()">
+        <button onclick="sendMessage()">➤</button>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="./js/toastr.min.js?v=20260913"></script>
+<script>
+    var token = localStorage.getItem('token');
+    if (!token) { location.assign('user-login.html'); }
+
+    if (window.toastr) { toastr.options = { positionClass: 'toast-top-center', timeOut: 3000 }; }
+
+    function logout() { localStorage.clear(); location.assign('user-login.html'); }
+
+    // 加载用户信息
+    $.ajax({
+        url: '/user/me',
+        headers: { token: token },
+        success: function(result) {
+            if (result.code === 200) { $('#userName').text(result.data.userName); }
+            else { logout(); }
+        },
+        error: function() { logout(); }
+    });
+
+    // 加载活动列表
+    loadActivities();
+
+    function loadActivities() {
+        $.ajax({
+            url: '/activity/find-list',
+            headers: { token: token },
+            data: { pageNum: 1, pageSize: 20 },
+            success: function(result) {
+                $('#activityLoading').hide();
+                if (result.code !== 200 || !result.data || !result.data.records) {
+                    $('#activityList').html('<div class="empty-state"><div class="icon">📭</div><p>暂无活动</p></div>');
+                    return;
+                }
+                var html = '';
+                result.data.records.forEach(function(a) {
+                    var badge = a.valid ? '<span class="badge badge-success">进行中</span>' : '<span class="badge badge-secondary">已结束</span>';
+                    html += '<div class="activity-card">' +
+                        '<h5>' + escapeHtml(a.activityName) + ' ' + badge + '</h5>' +
+                        '<p class="desc">' + escapeHtml(a.description || '') + '</p>' +
+                        '<button class="btn btn-outline-primary btn-sm-action" onclick="showDetail(' + a.activityId + ')">查看详情</button>' +
+                        '</div>';
+                });
+                $('#activityList').html(html);
+            },
+            error: function() { $('#activityLoading').text('加载失败，请刷新重试'); }
+        });
+    }
+
+    function showDetail(activityId) {
+        $.ajax({
+            url: '/activity/detail/find',
+            headers: { token: token },
+            data: { activityId: activityId },
+            success: function(result) {
+                if (result.code !== 200) { alert('加载详情失败'); return; }
+                var d = result.data;
+                $('#modalTitle').text(d.activityName);
+                var prizesHtml = '<h6>奖品列表</h6>';
+                if (d.prizes && d.prizes.length > 0) {
+                    d.prizes.forEach(function(p) {
+                        var cls = '';
+                        if (p.tiers && p.tiers.indexOf('一等奖') >= 0) cls = 'first';
+                        else if (p.tiers && p.tiers.indexOf('二等奖') >= 0) cls = 'second';
+                        else if (p.tiers && p.tiers.indexOf('三等奖') >= 0) cls = 'third';
+                        var validBadge = p.valid ? '<span class="badge badge-success">可抽</span>' : '<span class="badge badge-secondary">已抽完</span>';
+                        prizesHtml += '<div class="prize-item ' + cls + '">' +
+                            '<strong>' + escapeHtml(p.name) + '</strong> ' + validBadge +
+                            ' <span class="tier-badge badge badge-light">' + escapeHtml(p.tiers || '') + '</span>' +
+                            '<br><small>数量: ' + p.prizeAmount + ' | 价值: ¥' + (p.price || 0) + '</small>' +
+                            (p.description ? '<br><small>' + escapeHtml(p.description) + '</small>' : '') +
+                            '</div>';
+                    });
+                } else { prizesHtml += '<p class="text-muted">暂无奖品</p>'; }
+                prizesHtml += '<hr><h6>参与用户 (' + (d.users ? d.users.length : 0) + '人)</h6>';
+                if (d.users && d.users.length > 0) {
+                    prizesHtml += '<p class="text-muted small">' + d.users.map(function(u) { return escapeHtml(u.name); }).join('、') + '</p>';
+                }
+                prizesHtml += '<hr><p class="small text-muted">状态: ' + (d.status || '') + '</p>';
+                $('#modalBody').html(prizesHtml);
+                $('#activityDetailModal').modal('show');
+            },
+            error: function() { alert('请求失败'); }
+        });
+    }
+
+    // "我的中奖" Tab 切换时加载
+    var myWinLoaded = false;
+    $('a[href="#myWinPanel"]').on('shown.bs.tab', function() {
+        if (!myWinLoaded) loadMyWins();
+    });
+
+    function loadMyWins() {
+        myWinLoaded = true;
+        $('#myWinLoading').show();
+        $.ajax({
+            url: '/draw/my-records',
+            headers: { token: token },
+            success: function(result) {
+                $('#myWinLoading').hide();
+                if (result.code !== 200 || !result.data || result.data.length === 0) {
+                    $('#myWinList').html('<div class="empty-state"><div class="icon">🏆</div><p>你还没有中奖记录</p><p class="text-muted">多参与活动，好运等着你！</p></div>');
+                    return;
+                }
+                var html = '<table class="table table-striped record-table"><thead><tr><th>奖品</th><th>奖项</th><th>活动</th><th>中奖时间</th></tr></thead><tbody>';
+                result.data.forEach(function(r) {
+                    html += '<tr>' +
+                        '<td>' + escapeHtml(r.prizeName) + '</td>' +
+                        '<td>' + escapeHtml(r.prizeTier || '') + '</td>' +
+                        '<td class="text-muted small">' + escapeHtml(r.winnerName || '') + '</td>' +
+                        '<td class="text-muted small">' + (r.winningTime || '') + '</td>' +
+                        '</tr>';
+                });
+                html += '</tbody></table>';
+                $('#myWinList').html(html);
+            },
+            error: function() { $('#myWinLoading').text('加载失败'); }
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div'); div.textContent = str; return div.innerHTML;
+    }
+
+    // ==================== 小东助手 ====================
+    function toggleXiaoDong() {
+        var chat = $('#xiaoDongChat');
+        chat.toggle();
+    }
+
+    function sendMessage() {
+        var input = $('#chatInput');
+        var msg = input.val().trim();
+        if (!msg) return;
+
+        // 显示用户消息
+        var messages = $('#chatMessages');
+        messages.append('<div class="msg user">' + escapeHtml(msg) + '</div>');
+
+        // 显示加载提示
+        var loadingId = 'loading-' + Date.now();
+        messages.append('<div class="msg bot" id="' + loadingId + '"><span class="typing"></span><span class="typing"></span><span class="typing"></span></div>');
+        messages.scrollTop(messages[0].scrollHeight);
+        input.val('');
+
+        // SSE 流式请求
+        var botMsgDiv = null;
+        var fullText = '';
+
+        fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'token': token },
+            body: JSON.stringify({ message: msg })
+        }).then(function(response) {
+            // 移除加载动画
+            $('#' + loadingId).remove();
+
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+
+            function read() {
+                reader.read().then(function(result) {
+                    if (result.done) {
+                        // [DONE] 不显示
+                        return;
+                    }
+                    var text = decoder.decode(result.value, { stream: true });
+                    // 解析 SSE 格式: "data: xxx\n\n"
+                    var lines = text.split('\n');
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        if (line.startsWith('data:')) {
+                            var chunk = line.substring(5).trim();
+                            if (chunk === '[DONE]') continue;
+                            fullText += chunk;
+                            if (!botMsgDiv) {
+                                botMsgDiv = $('<div class="msg bot"></div>');
+                                messages.append(botMsgDiv);
+                            }
+                            botMsgDiv.text(fullText);
+                            messages.scrollTop(messages[0].scrollHeight);
+                        }
+                    }
+                    read();
+                });
+            }
+            read();
+        }).catch(function(err) {
+            $('#' + loadingId).remove();
+            messages.append('<div class="msg bot">小东：网络好像不太好，请重试～</div>');
+            messages.scrollTop(messages[0].scrollHeight);
+        });
+    }
+</script>
+</body>
+</html>
