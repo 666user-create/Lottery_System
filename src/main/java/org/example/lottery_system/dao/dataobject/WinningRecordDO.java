@@ -28,4 +28,16 @@ public class WinningRecordDO extends BaseDO{
     private Encrypt winnerPhoneNumber;
     //中奖时间
     private Date winningTime;
+    //领奖状态:NOT_CLAIMED未领取/CLAIMED已申请待发货/SHIPPED已发货/COMPLETED已签收
+    private String claimStatus;
+    //申请领奖时间
+    private Date claimTime;
+    //承运公司
+    private String shippingCompany;
+    //物流单号
+    private String shippingNo;
+    //发货时间
+    private Date shippedTime;
+    //确认收货时间
+    private Date completedTime;
 }

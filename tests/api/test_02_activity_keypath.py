@@ -2,7 +2,7 @@
 第③步 · 关键路径用例（2/7）：活动模块
 
 覆盖：列表正常流、分页参数真实生效（契约风险 C-1）、详情正常流与数据回显、
-      不存在活动的错误码定性（契约风险 C-3 / 上轮 BUG-003 真伪）、越权保护。
+      不存在活动的错误码定性（契约风险 C-3）、越权保护。
 
 能抓到的缺陷：
   - 分页参数被静默忽略（错误参数名/未绑定）→ 两页数据完全相同
@@ -11,11 +11,14 @@
   - 普通用户越权创建活动
 """
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code, assert_success, assert_field, assert_paging_params_effective
 
 
+@allure.feature("活动管理")
+@allure.story("活动创建/列表/详情关键路径")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestActivityKeyPath:
@@ -60,7 +63,7 @@ class TestActivityKeyPath:
         r_wrong = wrong.data.get("records", [])
         assert r_right == r_wrong, (
             "[分页契约] 期望 `page` 被忽略（与 currentPage=1 结果一致），"
-            f"实际不同 —— 后端可能已支持 `page`，请同步更新 docs/test/contract/api-contract.md\n"
+            f"实际不同 —— 后端可能已支持 `page`，请同步更新 docs/test/03-测试用例与测试数据设计.md §二\n"
             f" currentPage=1 → {[r.get('activityId') for r in r_right]}\n"
             f" page=2        → {[r.get('activityId') for r in r_wrong]}")
 
@@ -78,7 +81,7 @@ class TestActivityKeyPath:
 
     def test_detail_not_exist_must_not_report_success(self, admin_client):
         """
-        契约 C-3（定性上轮 BUG-003）：不存在的活动 id **不得**返回成功码。
+        契约 C-3：不存在的活动 id **不得**返回成功码。
         代码依据：ActivityController.java:63-66 在 detailDTO==null 时抛 ControllerException(202)。
         能抓到：返回 code=200 + data=null（前端无法区分"不存在"与"成功"），
                 及 HTTP 5xx（未处理异常）。
@@ -101,6 +104,8 @@ class TestActivityKeyPath:
         assert_code(resp, config.Code.BAD_REQUEST, hint="[活动详情-缺参数]")
 
 
+@allure.feature("活动管理")
+@allure.story("活动管理权限隔离")
 @pytest.mark.keypath
 class TestActivityPermission:
 

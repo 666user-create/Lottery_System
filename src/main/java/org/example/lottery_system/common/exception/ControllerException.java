@@ -10,7 +10,7 @@ import org.example.lottery_system.common.errorcode.ErrorCode;
 public class ControllerException extends RuntimeException{
     /*
     * 异常码
-    * @see com.example.lottery_system.common.errorcode.ControllerErrorCodeConstants
+    * @see org.example.lottery_system.common.errorcode.ControllerErrorCodeConstants
     * */
     private Integer code;
     /*

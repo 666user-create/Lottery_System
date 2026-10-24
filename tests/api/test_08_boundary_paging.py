@@ -9,14 +9,15 @@
   pageSize   : -1 / 0 / 1(边界) / 10(默认) / 999999(上界+1)
 
 断言基线：
-  - **不得返回 500**（内部 SQL 错误 → 且会泄露 SQL，见 BUG-008）
+  - **不得返回 500**（内部 SQL 错误 → 且会泄露 SQL，见 BUG-004）
   - 合理行为：400 参数校验错误，或安全降级为空/默认页
 
 能抓到的缺陷：
-  - 越界分页导致 500 + SQL 泄露（C-2 + BUG-008 组合）
+  - 越界分页导致 500 + SQL 泄露（C-2 + BUG-004 组合）
   - 负偏移返回"最后一页"等错误语义（操作成功但结果错）
 """
 import pytest
+import allure
 
 from common import config
 from common.client import assert_success
@@ -27,6 +28,8 @@ PAGING_ENDPOINTS = [
 ]
 
 
+@allure.feature("边界与异常")
+@allure.story("分页参数边界（负值/越界/超限）")
 @pytest.mark.boundary
 class TestPagingBoundary:
 

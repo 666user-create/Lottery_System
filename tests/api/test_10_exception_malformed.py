@@ -4,7 +4,7 @@
 覆盖：畸形 JSON、空 body、错误 Content-Type、类型错配、SQL 注入、XSS 输入、超长参数。
 
 断言基线（业主规则）：非法输入应返回 **400 参数错误**，
-不得返回 500（内部异常直穿）、不得在响应中泄露 SQL/堆栈/包路径（BUG-008）。
+不得返回 500（内部异常直穿）、不得在响应中泄露 SQL/堆栈/包路径（BUG-004）。
 
 能抓到的缺陷：
   - HttpMessageNotReadableException 未被专门处理 → 500 + 异常原文
@@ -14,11 +14,14 @@
 import uuid
 
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code, assert_no_internal_leak
 
 
+@allure.feature("边界与异常")
+@allure.story("畸形请求与错误 Content-Type")
 @pytest.mark.boundary
 class TestMalformedRequest:
 
@@ -50,13 +53,13 @@ class TestMalformedRequest:
 
     def test_no_internal_leak_on_error(self, admin_client):
         """
-        信息泄露检测（BUG-008）：错误响应中不得出现 SQL/包路径/异常类名/方法签名。
+        信息泄露检测（BUG-004）：错误响应中不得出现 SQL/包路径/异常类名/方法签名。
 
         触发方式：**分页越界**（currentPage=-1）。选择该路径的原因：
           - 修复后：@Min 拦截 → 400 业务码，无任何内部细节
           - 修复前（或 @Min 被移除）：offset 为负 → SQL 语法错误 → 落到兜底分支 →
             响应回显 `### SQL: select * from activity order by id desc limit ?,?` 等完整内部信息
-        因此本用例同时覆盖 **C-2（边界校验）** 与 **BUG-008（信息泄露）** 两个修复点。
+        因此本用例同时覆盖 **C-2（边界校验）** 与 **BUG-004（信息泄露）** 两个修复点。
 
         反向验证（第⑤步）：注释 PageParam 的 @Min 或恢复兜底 `e.getMessage()` → 本用例必须失败。
         """
@@ -70,6 +73,8 @@ class TestMalformedRequest:
             resp, hint="[信息泄露] 错误响应泄露内部实现细节（SQL/包路径/异常类名）")
 
 
+@allure.feature("边界与异常")
+@allure.story("SQL 注入与 XSS 载荷")
 @pytest.mark.boundary
 class TestInjectionAndXss:
 
@@ -124,6 +129,8 @@ class TestInjectionAndXss:
             f"[XSS] 特殊字符导致 500：{resp.brief()}")
 
 
+@allure.feature("边界与异常")
+@allure.story("超大输入")
 @pytest.mark.boundary
 class TestOversizedInput:
 

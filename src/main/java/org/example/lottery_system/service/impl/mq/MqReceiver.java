@@ -12,7 +12,6 @@ import org.example.lottery_system.service.dto.WinnerRecordDTO;
 import org.example.lottery_system.service.DrawPrizeService;
 import org.example.lottery_system.service.QQEmailService;
 import org.example.lottery_system.service.SMSService;
-import org.example.lottery_system.service.SMSService;
 import org.example.lottery_system.service.activitystatus.ActivityStatusManager;
 import org.example.lottery_system.service.dto.ConvertActivityStatusDTO;
 import org.example.lottery_system.service.enums.ActivityPrizeStatusEnum;

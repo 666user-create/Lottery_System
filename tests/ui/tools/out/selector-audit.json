@@ -1,0 +1,923 @@
+{
+  "ActivityUiTest.java": {
+    "selectors": [
+      {
+        "kind": "id",
+        "expr": "activityName",
+        "hits": [
+          "create-activity.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "description",
+        "hits": [
+          "create-activity.html",
+          "create-prizes.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "buttonPrizes",
+        "hits": [
+          "create-activity.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "buttonUsers",
+        "hits": [
+          "create-activity.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "createActivity",
+        "hits": [
+          "admin.html",
+          "create-activity.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "#activities .activity-item",
+        "hits": [
+          "activities-list.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "#activities .activity-item a",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/activities-list.html",
+      "/create-activity.html"
+    ],
+    "frames": []
+  },
+  "AdminPageUiTest.java": {
+    "selectors": [
+      {
+        "kind": "id",
+        "expr": "activitiesList",
+        "hits": [
+          "admin.html",
+          "create-activity.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "createActivity",
+        "hits": [
+          "admin.html",
+          "create-activity.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "userList",
+        "hits": [
+          "admin-register.html",
+          "admin.html",
+          "user-list.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "register",
+        "hits": []
+      },
+      {
+        "kind": "id",
+        "expr": "contentFrame",
+        "hits": [
+          "admin.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".sidebar",
+        "hits": [
+          "admin.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "#userList tr",
+        "hits": [
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-register.html",
+          "admin.html",
+          "faq-management.html",
+          "nav.html",
+          "operation-log.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "registerForm",
+        "hits": [
+          "admin-register.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "name",
+        "hits": [
+          "admin-register.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "mail",
+        "hits": [
+          "admin-register.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "phoneNumber",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "password",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "toggleAdmin",
+        "hits": [
+          "admin-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/activities-list.html",
+      "/admin-register.html",
+      "/admin.html",
+      "/user-list.html"
+    ],
+    "frames": []
+  },
+  "AiChatUiTest.java": {
+    "selectors": [
+      {
+        "kind": "id",
+        "expr": "input",
+        "hits": [
+          "chat.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "sendBtn",
+        "hits": [
+          "chat.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "handoverBtn",
+        "hits": [
+          "chat.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".msg.ai .bubble",
+        "hits": [
+          "admin-login.html",
+          "chat.html",
+          "operation-log.html",
+          "user-lobby.html",
+          "user-login.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".msg.ai",
+        "hits": [
+          "admin-login.html",
+          "chat.html",
+          "operation-log.html",
+          "user-lobby.html",
+          "user-login.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/chat.html"
+    ],
+    "frames": []
+  },
+  "BaseUiTest.java": {
+    "selectors": [
+      {
+        "kind": "cssSelector",
+        "expr": "[name='phoneNumber']",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='password']",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "button[type='submit']",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "tagName",
+        "expr": "body",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "admin.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "draw.html",
+          "faq-management.html",
+          "js/auth-guard.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/user-login.html"
+    ],
+    "frames": []
+  },
+  "HandoverUiTest.java": {
+    "selectors": [
+      {
+        "kind": "cssSelector",
+        "expr": "#tbody tr",
+        "hits": [
+          "admin-claim.html",
+          "admin-handover.html",
+          "faq-management.html",
+          "nav.html",
+          "operation-log.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".status-btn[data-status='PENDING']",
+        "hits": [
+          "admin-claim.html",
+          "admin-handover.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//button[contains(text(),'待处理')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//tbody//button[contains(text(),'处理中')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//tbody//button[contains(text(),'已解决')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".status-btn[data-status='RESOLVED']",
+        "hits": [
+          "admin-claim.html",
+          "admin-handover.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/admin-handover.html"
+    ],
+    "frames": []
+  },
+  "LoginFlowUiTest.java": {
+    "selectors": [
+      {
+        "kind": "cssSelector",
+        "expr": "[name='phoneNumber']",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='password']",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "button[type='submit']",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/admin-login.html"
+    ],
+    "frames": []
+  },
+  "LoginPageUiTest.java": {
+    "selectors": [
+      {
+        "kind": "tagName",
+        "expr": "body",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "admin.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "draw.html",
+          "faq-management.html",
+          "js/auth-guard.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "input",
+        "hits": [
+          "chat.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "sendBtn",
+        "hits": [
+          "chat.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "handoverBtn",
+        "hits": [
+          "chat.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/admin-handover.html",
+      "/chat.html",
+      "/user-lobby.html",
+      "/user-login.html",
+      "/user-register.html"
+    ],
+    "frames": []
+  },
+  "LogoutPermissionUiTest.java": {
+    "selectors": [
+      {
+        "kind": "xpath",
+        "expr": "//button[contains(text(),'退出')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "admin.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".btn-outline-danger",
+        "hits": [
+          "user-profile.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "#tbody tr",
+        "hits": [
+          "admin-claim.html",
+          "admin-handover.html",
+          "faq-management.html",
+          "nav.html",
+          "operation-log.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/admin-handover.html",
+      "/user-lobby.html"
+    ],
+    "frames": []
+  },
+  "PrizeUiTest.java": {
+    "selectors": [
+      {
+        "kind": "cssSelector",
+        "expr": "tbody tr",
+        "hits": [
+          "admin-claim.html",
+          "admin-handover.html",
+          "faq-management.html",
+          "nav.html",
+          "operation-log.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='prizeName']",
+        "hits": [
+          "create-prizes.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "prizeName",
+        "hits": [
+          "create-prizes.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "price",
+        "hits": [
+          "create-prizes.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='price']",
+        "hits": [
+          "create-prizes.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "input[type='file']",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "nextPage",
+        "hits": []
+      },
+      {
+        "kind": "cssSelector",
+        "expr": ".next",
+        "hits": [
+          "draw.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//button[contains(text(),'下一页')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/create-prizes.html",
+      "/prizes-list.html"
+    ],
+    "frames": []
+  },
+  "RegisterFlowUiTest.java": {
+    "selectors": [
+      {
+        "kind": "cssSelector",
+        "expr": "[name='name']",
+        "hits": [
+          "admin-register.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='mail']",
+        "hits": [
+          "admin-register.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='phoneNumber']",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "[name='password']",
+        "hits": [
+          "admin-login.html",
+          "admin-register.html",
+          "user-login.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "cssSelector",
+        "expr": "button[type='submit']",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/user-register.html"
+    ],
+    "frames": []
+  },
+  "RegisterLoginFlowUiTest.java": {
+    "selectors": [
+      {
+        "kind": "cssSelector",
+        "expr": "button[type='submit']",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      }
+    ],
+    "pages": [
+      "/user-login.html",
+      "/user-register.html"
+    ],
+    "frames": []
+  },
+  "WinningRecordsUiTest.java": {
+    "selectors": [
+      {
+        "kind": "id",
+        "expr": "container",
+        "hits": [
+          "draw.html"
+        ]
+      },
+      {
+        "kind": "id",
+        "expr": "list",
+        "hits": [
+          "draw.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//button[contains(text(),'中奖')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "draw.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "statistics.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//*[contains(text(),'中奖名单')]",
+        "hits": [
+          "activities-list.html",
+          "draw.html",
+          "nav.html",
+          "public-winners.html",
+          "user-lobby.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//button[contains(text(),'分享')]",
+        "hits": [
+          "activities-list.html",
+          "admin-claim.html",
+          "admin-handover.html",
+          "admin-login.html",
+          "admin-register.html",
+          "chat.html",
+          "create-activity.html",
+          "create-prizes.html",
+          "draw.html",
+          "faq-management.html",
+          "js/toastr.min.js",
+          "nav.html",
+          "operation-log.html",
+          "prizes-list.html",
+          "public-winners.html",
+          "user-list.html",
+          "user-lobby.html",
+          "user-login.html",
+          "user-profile.html",
+          "user-register.html"
+        ]
+      },
+      {
+        "kind": "xpath",
+        "expr": "//*[contains(text(),'复制链接')]",
+        "hits": []
+      }
+    ],
+    "pages": [
+      "/draw.html"
+    ],
+    "frames": []
+  }
+}

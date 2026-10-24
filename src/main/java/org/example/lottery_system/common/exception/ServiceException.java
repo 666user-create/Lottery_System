@@ -10,7 +10,7 @@ import org.example.lottery_system.common.errorcode.ErrorCode;
 public class ServiceException extends RuntimeException{
     /*
      * 异常码
-     * @see com.example.lottery_system.common.errorcode.ServiceErrorCodeConstants
+     * @see org.example.lottery_system.common.errorcode.ServiceErrorCodeConstants
      * */
     private Integer code;
     /*

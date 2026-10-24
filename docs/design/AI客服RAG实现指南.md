@@ -24,6 +24,7 @@
 - [第三部分:动手实现(照抄就能跑)](#第三部分动手实现照抄就能跑)
 - [第四部分:测试清单](#第四部分测试清单)
 - [第五部分:常见坑与扩展方向](#第五部分常见坑与扩展方向)
+- [第六部分:进阶重构方案(Spring AI 标准组件化)](#第六部分进阶重构方案spring-ai-标准组件化)
 
 ---
 
@@ -37,7 +38,7 @@
 |---|---|---|
 | 知识库问答(RAG) | 小东能根据公司的 FAQ 知识库回答问题,比如"怎么参与抽奖""中奖后怎么领奖" | 普通用户 |
 | 转人工 | 用户说"转人工"或点按钮,生成一张工单,由管理员处理 | 普通用户 + 管理员 |
-| 管理端处理工单 | 管理员在后台看到所有转人工请求,标记"处理中/已解决/已关闭" | 管理员 |
+| 管理端处理工单 | 管理员在后台看到所有转人工请求,标记"处理中/已解决";需要作废的工单直接删除(不再有"已关闭"状态) | 管理员 |
 
 **一句话总结:小东 = 现有工具调用能力 + 知识库问答 + 转人工。**
 
@@ -1822,3 +1823,456 @@ boolean adminOnly = "/activity/create".equals(path)
 > 3. **AI 只能查,不能改** —— 永远不要给 AI 暴露数据库写操作的接口。
 
 > 遇到问题先看"常见坑",再不行找项目经理。加油!💪
+
+---
+
+# 第六部分:进阶重构方案(Spring AI 标准组件化)
+
+> **定位**:第三部分(第 0~10 步)是**已落地的实现**(手写轻量版,零新依赖)。
+> 本部分是**框架化重构方案**,用 Spring AI 标准组件替换手写逻辑,适合作为毕设/技术升级方向。
+> **两份实现都可保留**:现有版本作为基线对照,重构版作为目标形态,两者对比可作为实验数据。
+
+## 6.1 手写版 vs 框架化版
+
+| 维度 | 当前实现(手写轻量) | 重构方案(框架化标准) |
+|---|---|---|
+| 知识库来源 | FAQ 问答对表 | 文档 ETL 管道(Reader → Transformer → VectorStore) |
+| 向量化 | 手写 HTTP 调 Embedding,向量存 MySQL TEXT | `EmbeddingModel` + `VectorStore` 统一管理 |
+| 检索 | 内存加载全部向量算余弦相似度 | `VectorStore.similaritySearch()` 走索引 |
+| **降级兜底** | ✅ 向量失败 → 关键词 bigram | 需补(见 6.2 模块二) |
+| 重排 | ❌ 无 | Rerank 模型(自己接,见 6.2 模块二) |
+| Prompt 组装 | 手写 SYSTEM_PROMPT 拼接 | `QuestionAnswerAdvisor` / `RetrievalAugmentationAdvisor` |
+| 会话 | RedisUtil 手写 JSON | `ChatMemory` + `JdbcChatMemoryRepository` |
+| 可观测 | 仅日志 | Zipkin 链路追踪 + Prometheus 指标 |
+| 新依赖 | **零** | 4~5 个 starter + Redis Stack |
+
+## 6.2 重构后的模块划分
+
+### 模块一:知识库构建(离线索引管道)
+
+```
+MySQL 业务表 → [DocumentReader] → [DocumentTransformer] → [VectorStore]
+                 读数据              切分/预处理        向量化 + 持久化
+```
+
+| 步骤 | 做法 | 关键点 |
+|---|---|---|
+| 1. Reader | **用 Spring AI Alibaba 的 `mysql-document-reader`**,直接读 SQL 查询结果转 `Document` | ✅ 现成组件,不用自己实现(见下方依赖) |
+| 2. Transformer | `TokenTextSplitter` 切分,调 chunkSize / overlap | ⚠️ Transformer 只负责**切分**;向量化在第 3 步 |
+| 3. VectorStore | `vectorStore.add(chunks)`,内部调 `EmbeddingModel` 完成向量化 + 持久化 | 需 **Redis Stack**(见 6.3 前提) |
+| 4. 重建开关 | 配置 `app.rag.reindex=true/false`,只在需要时重建索引 | 避免每次启动重复向量化,省 token |
+| 5. 并发加载 | `ExecutorService`(固定线程池)+ `CountDownLatch` 等待完成 | ⚠️ CountDownLatch 只是**等待计数器**,并发要靠线程池;注意 Embedding API 的 RPM 限流 |
+
+**✅ MySQL DocumentReader 正确信息(此前文档若写"需自己实现"以此为准)**
+
+Spring AI **官方**(`org.springframework.ai`)确实没有 MySQL Reader;
+但 **Spring AI Alibaba 社区模块**提供了现成实现:
+
+```xml
+<dependency>
+  <groupId>com.alibaba.cloud.ai</groupId>
+  <artifactId>mysql-document-reader</artifactId>
+  <version>${spring.ai.alibaba.version}</version>
+</dependency>
+```
+
+标准三段式用法(与所有社区 Reader 一致):
+
+```java
+// 1. 读:SQL 查询结果 → List<Document>
+List<Document> documents = reader.get();
+// 2. 切:TokenTextSplitter 切分
+TokenTextSplitter splitter = new TokenTextSplitter();
+List<Document> chunks = splitter.apply(documents);
+// 3. 存:写入向量库(内部完成向量化)
+vectorStore.add(chunks);
+```
+
+> 参考:Spring AI Alibaba 社区 Reader 列表(含 mysql/postgresql/mongodb/es 等 20+ 种)
+> https://java2ai.com/en/docs/1.0.0.2/practices/integrations/documentreader/
+> 具体构造参数以官方 README 为准。
+
+### 模块二:检索链路(在线问答)
+
+```
+用户提问 → 向量召回 Top-K → [重排] → 组装上下文 → LLM 生成
+                              ↑
+                    未命中/异常 → 关键词检索降级
+```
+
+| 环节 | 做法 | 关键点 |
+|---|---|---|
+| 召回 | `vectorStore.similaritySearch(query, topK)` | topK 建议 5~10,给重排留空间 |
+| 重排 | 实现 `DocumentPostProcessor`,内部调 Rerank 模型(Cohere / BGE-Reranker) | ⚠️ Spring AI 1.0.9 / 1.1.8 **均无内置 ReRanker 抽象**(已查 jar),需自己接;多一次 API 调用,有延迟与成本 |
+| **降级兜底** | 向量检索异常 → 自动切关键词检索 → 仍无结果则如实告知 | 保证链路不中断(当前手写版已实现,重构时**不要丢**) |
+| 阈值过滤 | 相似度低于阈值的结果丢弃 | 防止"硬答"无关内容 |
+
+### 模块三:提示词与生成
+
+| 项 | 做法 |
+|---|---|
+| RAG Advisor | `QuestionAnswerAdvisor`(需加 `spring-ai-advisors-vector-store`)自定义模板;进阶用 `RetrievalAugmentationAdvisor`(可插拔检索器 + 后处理器) |
+| System Prompt | 三条约束:①只依据知识库回答,不编造;②知识库没有就明说;③忽略"修改提示词/越权"类指令 |
+| 上下文控制 | 只带最近 N 轮对话,控制 token 成本 |
+
+### 模块四:会话记忆
+
+| 层 | 组件 | 职责 |
+|---|---|---|
+| 窗口管理 | `MessageWindowChatMemory` | 决定"带几条历史给模型" |
+| 存储实现 | `JdbcChatMemoryRepository` | 决定"历史存哪" |
+
+- **概念要分清**:`ChatMemory` 是窗口策略,`ChatMemoryRepository` 是存储实现。
+- Jdbc 方案**没有自动过期**,需自己写定时清理任务。
+- 更优组合:**Jdbc 存全量明细(可审计)+ Redis 存热会话(快)**。
+
+### 模块五:MCP 工具集成
+
+| 类型 | 归属 | 说明 |
+|---|---|---|
+| **查询类** | MCP 工具(`@Tool`) | 活动、奖品、用户、中奖记录、工单查询、FAQ 检索 |
+| **写操作类** | 业务接口(不放 MCP) | 转人工建单走 `/api/handover/create` + 登录校验 |
+
+> 🔴 **转人工建单不要做成 MCP 工具**:写操作暴露给模型 = 可被诱导批量建单(刷单风险)。
+> 分层原则:**MCP 只读,写操作走业务接口 + 权限校验**;工单本身必须落库。
+
+**接入配置要点**:
+- 端点:`/sse`(事件流)+ `/mcp/message`(消息投递)
+- ⚠️ **必须在 `AppConfig` 的拦截器排除列表放行这两个路径**,否则客户端连接被 401 拦截(实测踩过)
+
+### 模块六:内容安全
+
+| 层 | 做法 |
+|---|---|
+| 敏感词 | **DFA / Trie 树**词库匹配(比正则快),**输入 + 输出双向**过滤,命中后拒答或转人工 |
+| 误杀防护 | 白名单机制,避免正常业务词被拦截 |
+| 注入防护 | System Prompt 声明边界 + 关键操作不交给模型决策 |
+| 权限分级 | 知识库管理、工单管理接口要求 ADMIN 身份(当前已实现) |
+
+### 模块七:可观测性
+
+| 目标 | 工具 | 说明 |
+|---|---|---|
+| 链路追踪 | **Zipkin** + Micrometer Tracing | 看 embedding 调用、LLM 调用、SQL 各自耗时 |
+| token 消耗 | **Micrometer + Prometheus + Grafana** | ⚠️ Zipkin 看不了 token(它是链路追踪工具);Spring AI 1.0 内置 Observation,会自动采集 token usage 指标 |
+
+## 6.3 前提验证与新增依赖
+
+**🔴 第一步必须先验证 Redis 是否支持向量检索:**
+
+```bash
+redis-cli -p 8888 FT._LIST     # 有返回 = 支持(Redis Stack);报错 = 普通 Redis,不支持
+```
+- 支持 → 用 `spring-ai-starter-vector-store-redis`
+- 不支持 → 换 Redis Stack 镜像,或先用 MySQL 存向量(当前实现)做基线
+
+**新增依赖:**
+
+```xml
+<!-- 向量存储(需 Redis Stack) -->
+<dependency>spring-ai-starter-vector-store-redis</dependency>
+<!-- RAG Advisor -->
+<dependency>spring-ai-advisors-vector-store</dependency>
+<!-- 高级 RAG(检索器 / DocumentPostProcessor 扩展点) -->
+<dependency>spring-ai-rag</dependency>
+<!-- Jdbc 会话存储 -->
+<dependency>spring-ai-starter-model-chat-memory-repository-jdbc</dependency>
+<!-- MySQL 文档读取(Spring AI Alibaba 社区) -->
+<dependency>com.alibaba.cloud.ai:mysql-document-reader</dependency>
+<!-- 可观测性 -->
+<dependency>micrometer-tracing-bridge-brave</dependency>
+<dependency>zipkin-reporter-brave</dependency>
+<dependency>micrometer-registry-prometheus</dependency>
+```
+
+## 6.4 实施顺序(每阶段独立可验证)
+
+| 阶段 | 内容 | 验收标准 |
+|---|---|---|
+| P0 | **验证 Redis 向量能力**(前提) | `FT._LIST` 可用;否则确定替代方案 |
+| P1 | 索引管道:MySQL Reader → 切分 → 向量化 → 入库 + 重建开关 | 知识库可一键重建,日志可见索引条数 |
+| P2 | 检索链路:召回 → 重排 → **降级兜底** | 知识库内问题能命中;模拟向量故障仍可答 |
+| P3 | Advisor + Prompt 模板接入 | 回答严格引用知识库内容 |
+| P4 | Jdbc 会话记忆 + 清理任务 | 多轮对话连贯,重启不丢历史 |
+| P5 | MCP 工具 + 工单业务接口 | 客户端能发现工具;建单走接口且有权限校验 |
+| P6 | 敏感词过滤 + 权限分级 | 敏感输入被拦截;普通用户访问管理接口 403 |
+| P7 | Zipkin + Prometheus | 能看链路耗时与 token 用量曲线 |
+
+## 6.5 易错点对照表(重构时逐个核对)
+
+| 容易写错的地方 | 正确做法 |
+|---|---|
+| "用 Transformer 转成向量" | Transformer 只**切分**;向量化在 `VectorStore.add()` 由 EmbeddingModel 完成 |
+| "自己实现 MySQL Reader" | 用 Spring AI Alibaba 的 `mysql-document-reader`(现成) |
+| "配置写在 xml 里" | 用 `application.yml` / `@ConfigurationProperties` |
+| "直接上 Redis 向量库" | 先验证是否 Redis Stack,普通 Redis 不支持 |
+| "CountDownLatch 做多线程" | 它是等待计数器,并发用 `ExecutorService` + CountDownLatch;注意 API 限流 |
+| "重排直接用框架能力" | Spring AI 1.0.9/1.1.8 无内置 ReRanker,用 `DocumentPostProcessor` 自己接 |
+| "转人工工单做成 MCP 工具" | 写操作别放 MCP(可被诱导刷单),走业务接口 |
+| "Zipkin 看 token 消耗" | Zipkin 看链路耗时;token 用 Micrometer + Prometheus |
+
+## 6.6 重构时不要丢的三样东西
+
+当前手写版里有、重构方案里容易漏掉的能力:
+
+1. **检索降级兜底** —— 向量不可用时切关键词检索(含 bigram 排序)。
+2. **切分参数调优** —— chunkSize / overlap 是 RAG 效果的核心变量,不能默认值一跑了事。
+3. **效果评估** —— 召回率/准确率怎么测?没有评估就没有实验数据(毕设必需)。
+
+> 📌 结论:现有手写实现**保留不动**作为基线,重构版按 P0→P7 逐步替换。
+> 两者在检索精度、响应延迟、可维护性上的对比,本身就是有价值的技术结论。
+
+---
+
+## 6.7 重构实施记录(已落地)
+
+> 本节记录按 6.1~6.6 方案落地时的**实际做法、实际坐标与踩过的坑**,与上面的"方案"如有出入,以本节为准。
+
+### 6.7.1 前置验证结论(决定方案形态)
+
+| 验证项 | 实际结果 | 应对 |
+|---|---|---|
+| Redis 向量检索能力 | `FT._LIST` → `unknown command`,Redis 5.0.14 **普通版**,无 RediSearch | 放弃 `RedisVectorStore`,改用 **SimpleVectorStore** |
+| 本机 Docker | 未安装,无法一键起 Redis Stack | 同上 |
+| HuggingFace 连通性 | 官方域名**超时不通**,`hf-mirror.com` 通 | 模型走 hf-mirror 镜像 |
+| Alibaba MySQL Reader 版本 | `spring-ai-alibaba-starter-document-reader-mysql:1.1.2.4` 依赖 `spring-ai-commons:1.1.2` | 与项目 `1.0.9` 版本线不一致 → **自写 Reader** |
+| Embedding 服务 | 无任何 API key | 用本地 ONNX 模型 `TransformersEmbeddingModel`,完全离线 |
+
+### 6.7.2 三个关键决策
+
+| 决策 | 选择 | 理由 |
+|---|---|---|
+| 向量存储 | `SimpleVectorStore`(内存 + JSON 落盘) | 零新中间件;毕设演示够用;可无缝换 `RedisVectorStore`(将来装 Redis Stack) |
+| 向量化 | 本地 ONNX **bge-small-zh-v1.5(512 维)** | 零 API key;中文效果好。**注意**:框架默认模型是英文 `all-MiniLM-L6-v2`,中文场景必须替换 |
+| MySQL 读取 | **自写 `FaqDocumentReader`**(约 50 行) | 避开 Alibaba 社区组件的版本线冲突 |
+
+### 6.7.3 实际新增依赖(spring-ai 1.0.9)
+
+```xml
+<dependency>org.springframework.ai:spring-ai-vector-store</dependency>              <!-- SimpleVectorStore -->
+<dependency>org.springframework.ai:spring-ai-starter-model-transformers</dependency><!-- 本地 ONNX Embedding -->
+<dependency>org.springframework.ai:spring-ai-advisors-vector-store</dependency>     <!-- QuestionAnswerAdvisor -->
+<dependency>org.springframework.ai:spring-ai-rag</dependency>                       <!-- DocumentPostProcessor -->
+<dependency>org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc</dependency>
+<dependency>org.springframework.boot:spring-boot-starter-actuator</dependency>
+<dependency>io.micrometer:micrometer-tracing-bridge-brave</dependency>
+<dependency>io.zipkin.reporter2:zipkin-reporter-brave</dependency>
+<dependency>io.micrometer:micrometer-registry-prometheus</dependency>
+```
+
+### 6.7.4 新增代码文件
+
+| 文件 | 职责 |
+|---|---|
+| `service/ai/rag/RagProperties` | RAG 管道配置(`app.rag.*`) |
+| `service/ai/rag/FaqDocumentReader` | 自写 MySQL DocumentReader(ETL 的 Reader) |
+| `service/ai/rag/KnowledgeIndexService` | 索引管道:Reader → TokenTextSplitter → VectorStore;含重建开关 + 线程池/CountDownLatch 并行 + 落盘 |
+| `service/ai/rag/VectorRagService` | 在线检索:向量召回 → 重排 → 组装上下文;异常自动降级关键词 |
+| `service/ai/rag/LocalReRanker` | 本地重排(实现 `DocumentPostProcessor`),无 Rerank API key 时的替代 |
+| `service/ai/safety/SensitiveWordFilter` | 敏感词 DFA/Trie,输入+输出双向过滤 |
+| `service/ai/FrameworkChatService` | 框架化对话:ChatClient + QuestionAnswerAdvisor + MessageChatMemoryAdvisor + MCP 工具 + 敏感词 |
+| `common/config/RagVectorStoreConfig` | SimpleVectorStore Bean + QuestionAnswerAdvisor(自定义模板) |
+| `common/config/ChatMemoryConfig` | JdbcChatMemoryRepository + MessageWindowChatMemory |
+
+### 6.7.5 新增配置(app.rag.*)
+
+```properties
+# Embedding:本地 ONNX(注意走镜像,官方域名不通)
+spring.ai.model.embedding=transformers
+spring.ai.embedding.transformer.onnx.modelUri=https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/onnx/model.onnx
+spring.ai.embedding.transformer.tokenizer.uri=https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/tokenizer.json
+spring.ai.embedding.transformer.cache.enabled=true
+spring.ai.embedding.transformer.cache.directory=./data/model-cache
+
+# RAG 管道
+app.rag.mode=framework          # framework=框架化;simple=原手写实现(可切换对比)
+app.rag.reindex=false           # 改了 FAQ 后置 true 重建索引
+app.rag.store-file=./data/vector-store.json
+app.rag.top-k=5                 # 向量召回条数
+app.rag.rerank-top-n=3          # 重排后注入条数
+app.rag.rerank-enabled=true
+app.rag.chunk-size=800
+app.rag.min-score=0.3
+app.rag.load-threads=4
+app.rag.memory-max-messages=20
+
+# 可观测性
+management.tracing.sampling.probability=1.0
+management.zipkin.tracing.endpoint=http://localhost:9411/api/v2/spans
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
+```
+
+### 6.7.6 建表(会话记忆)
+
+```sql
+CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
+    conversation_id VARCHAR(36) NOT NULL,
+    content         TEXT        NOT NULL,
+    type            VARCHAR(10) NOT NULL,
+    timestamp       TIMESTAMP   NOT NULL,
+    CONSTRAINT TYPE_CHECK CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
+);
+CREATE INDEX SPRING_AI_CHAT_MEMORY_IDX ON SPRING_AI_CHAT_MEMORY (conversation_id, timestamp);
+```
+
+> ⚠️ Jdbc 记忆**没有自动过期**,需自己加定时清理(见 `ai-tables.sql` 末尾注释)。
+
+### 6.7.7 实施中新增的坑(补充到上面的易错点)
+
+| 坑 | 现象 | 解决 |
+|---|---|---|
+| 让 Spring 启动时下载 90MB 模型 | 启动"卡住"无进度,像死机 | **先手工下载**模型(见 6.7.9 网址),再配置本地路径 |
+| 两个 EmbeddingModel Bean 冲突 | OpenAI starter 也会提供 EmbeddingModel | 用 `spring.ai.model.embedding=transformers` 指定提供者 |
+| `TokenTextSplitter` 不支持 overlap | 配置了 `chunk-overlap` 但不生效 | 该 splitter 按句子切分;需要 overlap 得自定义 splitter |
+| 默认英文模型 | 中文检索效果接近随机 | 显式指定中文 ONNX 模型(bge-small-zh-v1.5) |
+| transformers 依赖体积 | 引入 DJL + ONNX Runtime + PyTorch engine,首次构建慢 | 属正常;首次推理还会下载 PyTorch native 库(几十 MB),第二次走缓存 |
+| MySQL 不支持 `CREATE INDEX IF NOT EXISTS` | 重复执行建表脚本报错 | 建索引前先确认是否已存在 |
+| **QuestionAnswerAdvisor 自定义模板缺少 `{query}`** 🔴 | 模型回答"请问有什么可以帮您的呢?"——**用户问题被吞掉** | Advisor 会用模板**替换**用户消息,模板必须同时包含 `{question_answer_context}` 和 `{query}` |
+| **RAG 模板"只允许用知识库作答"会抑制工具调用** 🔴 | 问"有哪些活动"不调用 MCP 工具,只答客套话 | 模板与 System Prompt 都要区分两类渠道:知识库管规则、工具管实时数据 |
+| **索引初始化用 `ApplicationRunner` 会被 MQ 阻塞** 🔴 | 启动后提问走上"关键词兜底"(向量库还是空的) | 改为 `@PostConstruct`,让索引在启动关键路径完成;并校验 load 后条目数,为 0 则重建 |
+
+> 🔴 标记的三条是"能静默降级、不报错但答不对"的隐性 Bug,排查成本最高,优先记住。
+
+### 6.7.9 模型文件与下载网址(备查)
+
+模型不放 Git,需本地准备(`data/models/` 已加入 .gitignore):
+
+| 文件 | 网址(hf-mirror 镜像,官方域名国内不通) | 大小 |
+|---|---|---|
+| `model_quantized.onnx` | `https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/onnx/model_quantized.onnx` | 22.9 MB |
+| `model.onnx`(全量) | `https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/onnx/model.onnx` | 90.5 MB |
+| `tokenizer.json` | `https://hf-mirror.com/Xenova/bge-small-zh-v1.5/resolve/main/tokenizer.json` | 439 KB |
+
+保存到 `data/models/`,文件名保持一致;若改用全量模型,同步修改
+`spring.ai.embedding.transformer.onnx.modelUri` 即可。
+
+### 6.7.10 验收结果(实测)
+
+| # | 验收项 | 结果 |
+|---|---|---|
+| 1 | 本地 ONNX 向量化(零 API key) | ✅ 512 维,bge-small-zh-v1.5 量化版 |
+| 2 | 索引管道(Reader→切分→向量化→落盘) | ✅ FAQ 2 条 → 文档块 2 个,耗时 133ms |
+| 3 | 向量库持久化/加载 | ✅ `data/vector-store.json` 13.2KB |
+| 4 | 向量召回 + 本地重排 | ✅ 命中 2 条,"怎么参与抽奖"排第一(distance 0.195) |
+| 5 | QuestionAnswerAdvisor + 自定义模板 | ✅ 回答严格引用知识库 |
+| 6 | MCP 工具调用 | ✅ 问活动返回真实 5 条;问奖品数返回 5 |
+| 7 | JdbcChatMemoryRepository 会话 | ✅ `SPRING_AI_CHAT_MEMORY` 表按会话落库 |
+| 8 | 敏感词双向过滤 | ✅ 输入命中即拦截 |
+| 9 | 降级兜底 | ✅ 向量库为空时自动关键词检索(日志可见) |
+| 10 | 诊断接口(管理员) | ✅ `/api/ai/rag/diagnose` 返回命中与 distance |
+| 11 | Zipkin 链路追踪 | ⚠️ 依赖已接入 + endpoint 已配置;需另行启动 Zipkin server 才能看面板 |
+| 12 | Prometheus 指标 | ✅ `/actuator/prometheus` 已暴露 |
+
+### 6.7.8 模式切换与对照实验
+
+```
+app.rag.mode=auto       → 自动探测(默认):远程向量可用走 simple,连不上外网回落 framework
+app.rag.mode=framework  → FrameworkChatService(RAG Advisor + Jdbc 记忆 + MCP 工具 + 敏感词)
+app.rag.mode=simple     → AiCustomerService(原手写:MySQL 存向量 + 余弦相似度 + Redis 记忆)
+```
+
+两套实现并存,可在同一数据集上对比:
+- **检索精度**:向量+重排 vs 手写余弦 vs 关键词兜底
+- **响应延迟**:含本地 ONNX 推理耗时
+- **可维护性**:代码量、扩展新工具/新数据源的成本
+
+> 这正是 6.6 节所说"保留手写实现作为基线"的价值所在。
+
+### 6.7.11 向量来源(本地优先)与本次修复记录
+
+**需求演变**:
+1. 最初设计:simple 模式用远程向量(硅基流动 bge-m3),framework 用本地 ONNX 模型。
+2. 实测发现问题:`ai.embedding.api-key` 为空 → 远程调用全部失败 → **`faq_embedding` 表一条数据都没有**,simple 模式实际只能退化成关键词检索;且每次新增 FAQ 都打一条 401 ERROR。
+3. 最终决策:**向量来源默认改用本地模型**(`ai.embedding.provider=local`),simple 与 framework 共用同一个本地模型,不需要任何 API Key。
+
+**当前向量方案**:
+
+| | simple 模式 | framework 模式 |
+|---|---|---|
+| 向量来源 | 本地 ONNX(bge-small-zh-v1.5,**512 维**) | 同一个本地模型(**512 维**) |
+| 向量存储 | **MySQL 表 `faq_embedding`** | **文件 `data/vector-store.json`** |
+| 检索实现 | `RagService`(余弦相似度 + 关键词兜底) | `QuestionAnswerAdvisor` + `SimpleVectorStore` |
+| 依赖 Key / 外网 | **不需要** | **不需要**(仅检索环节) |
+
+> 两者差异只剩"手写实现 vs Spring AI 框架",向量语义空间一致 → 做对照实验更公平。
+> `provider=remote` 仍保留:配置 Key 后可用远程 bge-m3(1024 维),用于对比不同向量模型的效果。
+
+**模式默认值**:`app.rag.mode=simple`(手写实现为默认运行路径:本地向量 → MySQL `faq_embedding` + 余弦相似度 + 手写 MCP 工具循环 + Redis 记忆);
+`framework` 一行配置即可切换(Spring AI 框架:SimpleVectorStore + Advisor + Jdbc 记忆 + MCP 工具 + 链路追踪);`auto` 保留(provider=remote 时才真正去探测外网)。
+
+**实现要点**:
+1. `EmbeddingClient` 支持 `provider=local|remote`:本地模式直接调用 Spring AI 的 `EmbeddingModel`;`isUsable()` 统一判断向量能力(本地=模型就绪;远程=配了 Key)。
+2. 远程实例使用**带超时的 RestTemplate**(3s 连接 / 6s 读取)。默认 RestTemplate 不能加短超时——DeepSeek 对话补全可能耗时几十秒,加了会误杀正常请求。
+3. `FaqEmbeddingSyncService`:**不再区分模式**,只要向量能力可用,启动后就在后台补齐 `faq_embedding` 缺失条目(本地模型免费,20 条约 1 秒)。
+4. `FaqController.add`:向量能力可用时同步写 `faq_embedding`,保证任何时候切到 simple 模式,知识库向量都是齐的。
+5. `RetrievalModeResolver`:启动时解析模式并缓存;auto 分支在 provider=local 时直接判定 simple 可用,provider=remote 时才真实探一次 `/embeddings`。
+
+**本次修复的两个 Bug(实测确认)**:
+| Bug | 根因 | 修法 |
+|---|---|---|
+| 管理端增删 FAQ 后客服检索不到 | `FaqController` 只写 MySQL 与 `faq_embedding`,从不更新 framework 用的 `SimpleVectorStore`;且 `reindex=false` 时重启直接加载旧索引,同样不生效 | 文档块 id 规范为 `faq-{faqId}-{序号}`,增删时增量更新索引(覆盖写 + 按 id 删除) |
+| 匿名用户触发个人信息工具抛异常 | `SimpleVectorStore` 的父类 `doDelete(Filter.Expression)` 抛 `UnsupportedOperationException`(**不支持按 metadata 删除**,只支持按 id 删);另外 `queryMyWinningRecords` 声明了 `ToolContext` 参数,而 Spring AI 在"上下文为空"时直接抛 `IllegalArgumentException` | ① 改用"固定 id + 按 id 删除";② `FrameworkChatService` **始终注入非空工具上下文**(匿名时注入 `anonymous=true`),工具侧据此返回友好话术 |
+
+**实测验证结果**:
+- **simple 模式(默认,本地向量)**:
+  - `faq_embedding` 自动补全 **20 条**(每条 512 维,JSON 约 10KB),日志显示"向量检索命中 3 条"而非关键词兜底
+  - 知识库问答(发货时间/参与方式/忘记密码/中奖概率)**全部答对**
+  - 工具查数据(活动列表)正常;匿名问个人数据 → 提示登录;已登录问"我中奖了吗" → **直接返回本人记录,不反问用户ID**
+  - 同一 session 追问 → 正确接上下文(Redis 记忆生效)
+- framework 模式:向量库 20 块加载正常;知识库问答、工具查活动、匿名问个人数据全部正常;`faq_embedding` 保持 20 条不变。
+
+**补充修复:simple 模式的工具调用也要传 ToolContext**
+`AiCustomerService.executeMcpTool` 原先只调 `tool.call(arguments)`,而 `queryMyWinningRecords` 声明了 `ToolContext` 参数 → simple 模式下已登录用户问"我中奖了吗"会直接报 `IllegalArgumentException`。
+现已与 `FrameworkChatService` 保持一致:`chat(..., userId)` → `callDeepSeek(messages, userId)` → 执行工具时传 `new ToolContext({userId})`(未登录传 `anonymous=true`)。
+
+**已知无害项**:即使默认走 simple 模式,framework 的知识库索引(`data/vector-store.json`,20 块,约 0.9 秒)仍会在启动时构建/加载,便于随时切换,开销可忽略。
+- 管理端新增 FAQ → **立刻可检索**;framework 模式下**不再产生 401 ERROR 日志**。
+
+**运维提醒(重要)**:
+- 更换向量来源/模型后,必须清空旧向量重建(simple: `delete from faq_embedding`;framework: 删除 `data/vector-store.json` 或设 `app.rag.reindex=true` 后重启),否则新旧语义空间不一致会导致检索错乱。清空后下次启动会自动补全。
+- 验证 simple 模式的远程链路可用本地 mock 服务:`tests/mock-embedding-server.py`(把 `ai.embedding.provider` 改回 `remote`、`base-url` 指向 `http://127.0.0.1:18099/v1`)。注意 mock 用字符二元组哈希生成向量,**只验证链路连通,不能用于评估回答质量**。
+
+### 6.7.12 MCP 对外工具集拆分 + 对话记录定期清理
+
+#### 一、对外工具集与站内工具集分离
+
+**问题**:`queryMyWinningRecords` 这类"自动识别当前登录用户"的工具,靠 `ToolContext` 里的 userId 工作;
+但 MCP Server 会把它一起暴露给外部 AI 客户端,外部调用只能得到"请先登录",语义混乱。
+
+**关键机制**(踩过才知道):Spring AI 的 MCP Server 自动配置会扫描容器里**所有** `ToolCallbackProvider` / `ToolCallback` Bean。
+所以"把站内全量工具也做成 Bean"会让个人信息类工具**重新泄漏**给外部。
+
+**最终结构**:
+
+| 用途 | 实现 | 工具数 | 是否被 MCP 扫描 |
+|---|---|---|---|
+| 对外(MCP Server) | `McpConfig.lotteryMcpTools`(过滤掉 `queryMy*` 后返回) | **8** | ✅ 是 |
+| 站内客服 | `InternalToolCallbacks`(普通 `@Component`,**不**实现 `ToolCallbackProvider`) | **9**(含个人信息类) | ❌ 否 |
+
+**命名约定**:个人信息类工具一律以 `McpTools.PERSONAL_TOOL_PREFIX`(`queryMy`)开头,新增此类工具自动被排除。
+
+**验证**:启动日志
+```
+站内客服可用工具 9 个(其中个人信息类 1 个,不对外暴露)
+MCP Server 对外暴露工具 8 个(总 9 个,已排除个人信息类 1 个)
+Registered tools: 8
+```
+
+#### 二、对话记录定期清理(默认保留 3 天)
+
+**问题**:framework 模式的会话记忆落在 `SPRING_AI_CHAT_MEMORY` 表,**只增不减**(实测积累了几十条/多个会话)。
+
+**方案**:`ChatMemoryCleanupService` + `@Scheduled`,配合新增的 `@EnableScheduling`。
+
+```properties
+app.chat-memory.retention-days=3        # 保留天数
+app.chat-memory.cleanup-cron=0 0 3 * * ? # 默认每天 03:00 检查一次(想严格每 3 天清理一次:0 0 3 */3 * ?)
+```
+
+- 清理对象:`SPRING_AI_CHAT_MEMORY` 中 `timestamp` 早于"现在 − 保留天数"的记录
+- simple 模式用的是 Redis 记忆,靠 Key 自身 TTL(`ai.memory.expire-seconds`)过期,**不受此项影响**
+- 保留天数 ≤ 0 时跳过清理(防止误配成 0 导致清空全表)
+
+**验证**(实测):把 cron 临时改成每分钟 + 插入一条 5 天前记录 → 定时任务触发并输出
+`对话记录清理完成: 保留 3 天,删除 25 条(早于 Mon Oct 12 23:05:00 CST 2026)`,
+数据库确认 5 天前记录已删、当前记录保留(66 行 → 43 行)。

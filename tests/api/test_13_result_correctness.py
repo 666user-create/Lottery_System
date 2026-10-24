@@ -17,11 +17,14 @@
 import uuid
 
 import pytest
+import allure
 
 from common import config
 from common.client import assert_success, assert_field
 
 
+@allure.feature("接口契约")
+@allure.story("跨接口数据一致性")
 @pytest.mark.boundary
 class TestCrossInterfaceConsistency:
 
@@ -71,6 +74,8 @@ class TestCrossInterfaceConsistency:
             f"{both_set - act_set}\n → prizeId 过滤逻辑异常")
 
 
+@allure.feature("接口契约")
+@allure.story("分页完整性")
 @pytest.mark.boundary
 class TestPaginationIntegrity:
 
@@ -126,6 +131,8 @@ class TestPaginationIntegrity:
             f"[口径一致性] 返回明细 {len(records)} 条 > total {total}，统计口径异常")
 
 
+@allure.feature("接口契约")
+@allure.story("误报成功检测")
 @pytest.mark.boundary
 class TestMisleadingSuccess:
 

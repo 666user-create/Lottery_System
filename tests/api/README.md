@@ -1,7 +1,9 @@
 # 抽奖系统接口自动化测试（Python + pytest + requests）
 
 > 本工程为**第③④步**用例载体，替代上轮引入的 Java RestAssured（已按业主决策移除，回归纯 Python 栈）。
-> 契约依据：`docs/test/contract/api-contract.md`（单一事实来源）
+> 契约依据：`docs/test/03-测试用例与测试数据设计.md` §二（单一事实来源，原 08-接口契约.md 已并入）
+> **用例说明文档**：`docs/test/明细/接口测试/00-总览.md` + 17 册分册（一册对应本目录一个 `test_*.py`）
+> 当前规模：**18 个测试文件 / 242 条用例**（全部通过，0 失败 / 0 xfail；2026-10-20，45 端点全覆盖）
 
 ---
 
@@ -42,6 +44,10 @@ python -m pytest -m reverse -v
 # 指定模块
 python -m pytest test_01_auth_keypath.py -v
 
+# 文档的「完整源码」章节与代码同步（改完代码跑一次，幂等）
+python tools/sync_test_code_to_docs.py
+python tools/sync_test_code_to_docs.py --check   # 只校验源码是否逐行进文档
+
 # Allure 报告（生成物，不入库）
 python -m pytest --alluredir=reports/allure-results
 allure serve reports/allure-results
@@ -72,7 +78,7 @@ LOTTERY_BASE_URL=http://localhost:8081 python -m pytest -m smoke -v
 | 无删除 API 的写操作（活动/奖品创建） | 第④步执行，配套 DB 白名单清理（见下） |
 
 **历史清理记录**：2026-09-13 按白名单清理 12 个测试账号 + 1 条测试 FAQ，
-备份见 `docs/test/backup/cleanup-20260913-*.sql`，清理后 `user=14`（基础）、`faq=2`（基线）。
+备份在 `backup/`（`测试数据清理备份-<YYYYMMDD>-<HHMMSS>-<表名>.sql`），清理后 `user=14`（基础）、`faq=2`（基线）。
 
 ## 5. 生成物说明（不入库，已写入 .gitignore）
 

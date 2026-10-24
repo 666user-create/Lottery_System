@@ -28,6 +28,62 @@ for _stream in (sys.stdout, sys.stderr):
             pass
 
 
+# ==================== Allure 报告元数据 ====================
+
+@pytest.fixture(scope="session", autouse=True)
+def allure_metadata(request):
+    """
+    写入 Allure 报告的环境信息与分类（报告首页 Environment / Categories 区块）。
+
+    为什么用 fixture 而不是 pytest_configure 钩子：钩子在插件初始化阶段执行，
+    `--alluredir` 的取值时机不稳定；session 级自动 fixture 一定在收集完成后执行，
+    此时 Allure 结果目录已由 allure-pytest 建好，写入最可靠（2026-09-16 实测）。
+
+    配置项全部来自可核对的真实值（被测地址/超时/测试前缀/固定账号），不写臆测值。
+    """
+    import os
+    # allure-pytest 把 --alluredir 存成 config.option.allure_report_dir（字符串），
+    # 兼容起见两条路都试；直接读 option.alluredir 拿到的是 None（2026-09-16 实测）
+    allure_dir = getattr(request.config.option, "allure_report_dir", None)
+    if not allure_dir:
+        try:
+            allure_dir = request.config.getoption("alluredir", None)
+        except Exception:  # noqa: BLE001
+            allure_dir = None
+    if isinstance(allure_dir, (list, tuple)):
+        allure_dir = allure_dir[0] if allure_dir else None
+    if not allure_dir:
+        print("[allure_metadata] 未指定 --alluredir，跳过环境信息写入")
+        return
+    try:
+        os.makedirs(allure_dir, exist_ok=True)
+        env = {
+            "被测地址": config.BASE_URL,
+            "HTTP 超时(s)": str(config.HTTP_TIMEOUT),
+            "AI 超时(s)": str(config.AI_TIMEOUT),
+            "MQ 超时(s)": str(config.MQ_TIMEOUT),
+            "测试数据前缀": config.TEST_PREFIX,
+            "普通用户账号": config.TEST_USER["mail"],
+            "管理员账号": config.TEST_ADMIN["mail"],
+            "Python": sys.version.split()[0],
+            "pytest": pytest.__version__,
+        }
+        with open(os.path.join(allure_dir, "environment.properties"), "w",
+                  encoding="utf-8") as f:
+            for k, v in env.items():
+                f.write(f"{k}={v}\n")
+        with open(os.path.join(allure_dir, "categories.json"), "w",
+                  encoding="utf-8") as f:
+            f.write('[\n'
+                    '  {"name": "产品缺陷（断言失败）", "matchedStatuses": ["failed"]},\n'
+                    '  {"name": "测试代码问题（错误）", "matchedStatuses": ["broken"]},\n'
+                    '  {"name": "已知缺陷（预期失败）", "matchedStatuses": ["skipped"],'
+                    ' "messageRegex": ".*xfail.*"}\n'
+                    ']\n')
+    except Exception as e:  # noqa: BLE001 — 报告元数据失败不得影响测试执行
+        print(f"[warn] 写入 Allure 元数据失败: {e}")
+
+
 # ==================== 实例指纹（防环境错配） ====================
 
 @pytest.fixture(scope="session", autouse=True)

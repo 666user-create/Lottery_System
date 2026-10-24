@@ -41,17 +41,78 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-# 测试报告（allure / pytest-html）
+# 测试报告（allure / pytest-html / surefire）
 tests/api/reports/
+tests/ui/reports/
 # JMeter 结果与报告
 tests/jmeter/*.jtl
 tests/jmeter/report/
 # UI 自动化截图（Selenium 每次运行生成）
-docs/test/artifacts/screenshots/
+tests/ui/screenshots/
 
-# 测试数据清理备份（db_cleanup.py --apply 自动生成，跑一次就有）
-docs/test/backup/
+# 测试数据清理备份（db_cleanup.py --apply 自动生成，跑一次就有；仅保留人工挑选的单份采样入库）
+docs/test/*-测试数据清理备份-*.sql
+tests/api/db-backup/
 # JMeter 运行日志（根目录，跑一次就有）
 jmeter.log
 *.log
 logs/
+
+# Zipkin 官方可执行 jar（129MB，随项目放在 zipkin/ 下；日志已由上面的 *.log 覆盖）
+zipkin/*.jar
+
+### RAG 重构：本地模型与向量库（体积大，不入库）###
+# 模型文件（22.9MB 量化版 / 90MB 全量版）下载地址见 docs/design/AI客服RAG实现指南.md 6.7.9
+data/models/
+data/model-cache/
+# 向量库落盘文件（由索引管道自动生成）
+data/vector-store.json
+
+### 本机草稿/中间产物：只忽略，不删除（本地文件原样保留）###
+# 说明：.gitignore 只决定 git 跟不跟踪，删不删是另一回事。
+#       想恢复跟踪只需删掉对应行，再用 git status 看。
+# 根目录的临时工作区：PDF 备份、字体、截图、docs 快照等（数百 MB）
+/tmp/
+# 论文排版过程目录（docx/pdf 中间件、预览图、一次性分析脚本）
+/.docwork/
+/ws_docfmt/
+/preview-*/
+/论文配图/
+# 论文草稿与一次性排版/作图脚本（不参与项目运行）
+/论文-*.txt
+/论文-*.docx
+/thesis-*.docx
+/thesis-checks.json
+/word-mcp-*.docx
+/_*.py
+/tmp-check.js
+/check_consistency.py
+/draw_figures.py
+/export_schema.py
+/fix_abstract.py
+/redraw_flow.py
+/db-schema.tsv
+# docs 下的调试残留（SSE 抓包、截图、一次性校验脚本，含硬编码密钥）
+docs/任务书/_*
+# 崩溃转储与探针文件
+erl_crash.dump
+test-write-probe.txt
+
+### 本机私有配置（敏感值只放这里；模板说明见 application.properties 注释）###
+src/main/resources/application-local.properties
+
+### Zipkin 本地启动脚本（个人机器路径相关，不入库）###
+/start-zipkin.cmd
+
+### docs/ 只上传 markdown：SQL/图片/附件一律不入库（本地文件保留）###
+/docs/**
+!/docs/**/
+!/docs/**/*.md
+# 例外：建表/补丁脚本被 md 文档点名要求执行（如 AI客服-验收清单 §25），保留
+!/docs/design/sql/*.sql
+
+### 操作系统/编辑器杂项 ###
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

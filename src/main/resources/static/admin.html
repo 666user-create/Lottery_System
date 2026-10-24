@@ -72,34 +72,41 @@
     .admin-page .sidebar {
       width: 220px;
       overflow-x: hidden;
+      /* 菜单项（5 组 + 10 个子项）高度会超过侧边栏可视高度，
+         父容器 .cont-box 是 overflow:hidden，因此这里必须有纵向滚动，
+         否则底部菜单会被裁掉且无法滚到 */
+      overflow-y: auto;
       height: calc(100vh - 80px);
       background-color: #fff;
-      padding:  24px 10px;
+      padding:  16px 10px;
       position: relative;
     }
     .admin-page .main-content {
       flex: 1;
       background-color: #fff;
     }
+    /* 行高由原来的 52px + 20px 间距收紧到 46px + 6px：
+       原先每项占 72px，16 项约 1200px，远超侧边栏高度。
+       收紧后 5 组标题 + 10 个子项约 672px，768p 屏幕上也能整屏放下。 */
     .admin-page .nav-link {
       display: flex;
       padding: 10px;
-      height: 52px;
+      height: 46px;
       text-decoration: none;
       border-radius: 4px;
-      margin-bottom: 20px;
-      padding-left: 30px;
+      margin-bottom: 6px;
+      padding-left: 24px;
       align-items: center;
       font-weight: 400;
-      font-size: 16px;
+      font-size: 15px;
       color: var(--gray-color);
     }
     .admin-page .nav-link img{
-      margin-right: 15px;
+      margin-right: 12px;
     }
     .nav-link.active,.nav-link:hover {
       width: 198px;
-      height: 52px;
+      /* 高度交给基础规则，避免hover时高度跳变 */
       background: var(--blue-color);
       border-radius: 10px;
     }
@@ -120,8 +127,11 @@
     }
     .sub-category .nav-link{
       width: 194px;
+      height: 36px;
+      margin-bottom: 2px;
       background-color: #fff;
-      padding-left: 43px;
+      padding-left: 38px;
+      font-size: 14px;
       color: var(--placeholder-color);
     }
     .sub-category .nav-link.active,.sub-category .nav-link:hover {
@@ -186,14 +196,39 @@
         </ul>
       </li>
       <li class="nav-item">
+        <!-- 账号管理：账号域统一收口 —— 既管他人（停用/启用），也提供改自己凭证的入口 -->
         <div class="nav-link renyuan">
           <img src="./pic/renyuan.png" class="white-img" style="display: none;" alt="">
           <img src="./pic/renyuan-0.png" class="gray-img"  alt="">
-          <span>人员管理</span>
+          <span>账号管理</span>
         </div>
         <ul class="nav flex-column sub-category">
-          <li><a class="nav-link" id="userList" data-desc="renyuan" data-url="user-list.html" href="javascript:void(0);">人员列表</a></li>
-          <li><a class="nav-link" id="register" data-desc="renyuancreate" data-url="register.html" href="javascript:void(0);">注册用户</a></li>
+          <li><a class="nav-link" id="userList" data-desc="renyuan" data-url="user-list.html" href="javascript:void(0);">账号列表</a></li>
+          <li><a class="nav-link" id="accountCenter" data-desc="renyuan" data-url="user-profile.html" href="javascript:void(0);">个人中心</a></li>
+        </ul>
+      </li>
+      <li class="nav-item">
+        <div class="nav-link kefu">
+          <img src="./pic/kefu.png" class="white-img" style="display: none;" alt="">
+          <img src="./pic/kefu-0.png" class="gray-img"  alt="">
+          <span>客服管理</span>
+        </div>
+        <ul class="nav flex-column sub-category">
+          <li><a class="nav-link" id="faqManage" data-desc="kefu" data-url="faq-management.html" href="javascript:void(0);">FAQ 知识库</a></li>
+          <li><a class="nav-link" id="handoverManage" data-desc="kefu" data-url="admin-handover.html" href="javascript:void(0);">转人工工单</a></li>
+          <li><a class="nav-link" id="claimManage" data-desc="kefu" data-url="admin-claim.html" href="javascript:void(0);">奖品发放</a></li>
+          <li><a class="nav-link" id="aiChatEntry" data-desc="kefu" data-url="chat.html" href="javascript:void(0);">AI 客服对话</a></li>
+        </ul>
+      </li>
+      <li class="nav-item">
+        <div class="nav-link tongji">
+          <img src="./pic/tongji.png" class="white-img" style="display: none;" alt="">
+          <img src="./pic/tongji-0.png" class="gray-img" alt="">
+          <span>数据统计</span>
+        </div>
+        <ul class="nav flex-column sub-category">
+          <li><a class="nav-link" id="statisticsPage" data-desc="tongji" data-url="statistics.html" href="javascript:void(0);">活动数据统计</a></li>
+          <li><a class="nav-link" id="operationLogPage" data-desc="tongji" data-url="operation-log.html" href="javascript:void(0);">操作日志</a></li>
         </ul>
       </li>
     </ul>
@@ -207,56 +242,105 @@
 <!-- 引入jQuery和Bootstrap的JavaScript -->
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script>
+  /*
+   * 子页面切换统一走 loadPage()：它会同时改 iframe src 并把当前页写进地址栏 hash。
+   *
+   * 为什么要写 hash：iframe 内部导航不会改变父页面 URL，浏览器无从记住用户在哪一页，
+   * 结果每次刷新都被打回 activities-list.html。把页面名放进 #page=xxx.html，
+   * 刷新时浏览器会原生保留 hash，据此即可还原当前页。
+   * 用 hash 而不是 localStorage，是因为 hash 还能跟随前进/后退，且不会跨会话残留。
+   */
+  var DEFAULT_PAGE = 'activities-list.html';
+  var currentPage = DEFAULT_PAGE;
+
+  // 白名单：直接取自侧边栏菜单的 data-url，新增菜单项自动生效。
+  // hash 是可被用户任意编辑的输入，不校验就等于允许加载任意地址（含外部站点）。
+  var KNOWN_PAGES = {};
+  $('ul.nav a[data-url]').each(function () {
+    KNOWN_PAGES[$(this).data('url')] = true;
+  });
+
+  function pageFromHash() {
+    var m = /^#page=([A-Za-z0-9._-]+\.html)$/.exec(location.hash || '');
+    // 先过正则再过白名单：既限制文件名形态，又限制必须是菜单里存在的页面
+    return (m && KNOWN_PAGES[m[1]]) ? m[1] : null;
+  }
+
+  function setActiveMenu(page) {
+    $('ul.nav .nav-link').removeClass('active');
+    var $link = $('ul.nav a[data-url="' + page + '"]');
+    if (!$link.length) return;
+    $link.addClass('active');
+    // 同时高亮所属分组标题
+    $link.parent().parent('.sub-category').prev().addClass('active');
+  }
+
+  function loadPage(page) {
+    if (!KNOWN_PAGES[page]) return;
+    currentPage = page;
+    // 每次都带新的时间戳：刷新后若沿用 hash 里的旧时间戳，会命中浏览器缓存拿到旧页面
+    $('#contentFrame').attr('src', page + '?param=' + Date.now());
+    if (location.hash !== '#page=' + page) {
+      location.hash = '#page=' + page;
+    }
+    setActiveMenu(page);
+  }
+
   // 监听子message事件,实现子页面向父页面传递
   window.addEventListener('message', function(e){
     console.log('子页面传递的数据', e.data)
     if(e.data && e.data.from){
-      var pages = e.data.from+'?param=' +  new Date().getTime()
-      $('#contentFrame').attr('src', pages);
-      let id = e.data.id
-      // 移除所有链接的激活样式
-      $('ul.nav .nav-link').removeClass('active');
-      // 为当前点击的链接添加激活样式
-      $(id).addClass('active');
-      $(id).parent().parent('.sub-category').prev().addClass('active');
+      // e.data.from 由同源子页面提供，仍走白名单校验
+      loadPage(e.data.from);
     }
   }, false);
 
   $(document).ready(function() {
-    $('ul.nav a:first').addClass('active');
+    /*
+     * 恢复当前页。
+     * 默认页与 iframe 的初始 src 一致，此时只补菜单高亮、不再次加载，
+     * 否则首次进入会白加载一次 activities-list。
+     */
+    var initial = pageFromHash() || DEFAULT_PAGE;
+    currentPage = initial;
+    if (initial !== DEFAULT_PAGE) {
+      loadPage(initial);
+    } else {
+      setActiveMenu(initial);
+    }
 
     // 导航点击事件处理
     $('ul.nav a').on('click', function(event) {
       event.preventDefault();
-
-      $('ul.nav .nav-link').removeClass('active');
-      $(this).addClass('active');
-      $(this).parent().parent('.sub-category').prev().addClass('active');
-
-      var randomParam = new Date().getTime();
-      var dataDesc = $(this).data('desc');
-
       // 修改这里：从自定义属性 data-url 中获取真实的路径
       var pageUrl = $(this).data('url');
-      var page = '';
-
       // 容错处理：如果点击的本身不是a标签或者没有data-url，就阻止后续执行
       if(!pageUrl) return;
-
-      if (dataDesc === "renyuancreate") {
-        page = pageUrl + "?param=" + randomParam + "&jumpList=true&admin=false";
-      } else {
-        page = pageUrl + "?param=" + randomParam;
-      }
-      $('#contentFrame').attr('src', page);
+      // 注：原先对 data-desc="renyuancreate" 有个附加 jumpList=true&admin=false 的分支，
+      // 对应的「注册用户」导航项已改为 user-list.html 上的按钮，该分支随之删除。
+      loadPage(pageUrl);
     });
+  });
+
+  // 前进/后退时让 iframe 跟随地址栏。
+  // loadPage 内部改 hash 也会触发本事件，靠 currentPage 比对挡住重复加载。
+  // 注意 hash 为空（用户后退回最初的无 hash 状态）也必须回落到默认页，
+  // 否则「点进奖品列表再按后退」会停在原地不动。
+  window.addEventListener('hashchange', function() {
+    var target = pageFromHash() || DEFAULT_PAGE;
+    if (target !== currentPage) {
+      loadPage(target);
+    }
   });
 
   // 退出登录
   function logout(){
     localStorage.removeItem("token")
     localStorage.removeItem("user_identity")
-    location.href='/blogin.html'
+    // 一并发掉 AI 会话 ID：会话记忆存在后端 Redis，
+    // 不清的话换账号登录会继续沿用上一个人的上下文
+    localStorage.removeItem("ai_session_id")
+    location.href='/admin-login.html'
   }
 </script>
 </body>

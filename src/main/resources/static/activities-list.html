@@ -5,6 +5,7 @@
   <title>活动列表</title>
   <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="./css/base.css?v=20260913">
+  <script src="./js/auth-guard.js?v=20260916"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -31,7 +32,11 @@
       padding-bottom: 12px;
     }
     .activity-info{
-      width: calc(100% - 120px);
+      /* 右侧操作区宽度不固定（结束/删除按钮会随状态增减），
+         这里只保证左侧信息不会把操作区挤出可视范围 */
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-right: 20px;
     }
     .activity-info h4{
       width: 100%;
@@ -53,7 +58,6 @@
       color: red;
       margin-bottom: 0;
       display: block;
-      width: 250px;
     }
     .inactive a{
       font-weight: 400;
@@ -61,8 +65,37 @@
       color: gray;
       margin-bottom: 0;
       display: block;
-      width: 250px;
     }
+    /* 操作区：跳转链接 + 结束/删除按钮在同一行右侧。
+       链接外层的 <p> 是块级元素，会把按钮挤到下一行，
+       故把 <p> 设为 inline-block 并去掉下边距。 */
+    .act-ops {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .act-ops > p {
+      display: inline-block;
+      margin: 0;
+      line-height: normal;
+    }
+    /* 与整页朴素后台风格一致：小号描边按钮，4px 圆角 */
+    .btn-mini {
+      font-size: 13px;
+      padding: 5px 14px;
+      border-radius: 4px;
+      border: 1px solid #999;
+      background: #fff;
+      color: #666;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .2s;
+    }
+    .btn-mini:hover { color: var(--blue-color); border-color: var(--blue-color); }
+    .btn-mini.danger:hover { color: var(--red-color); border-color: var(--red-color); }
+    /* 已结束的活动不给「结束」按钮，用占位保持右侧对齐稳定 */
+    .op-holder { width: 74px; }
     .pagination {
       display: flex;
       justify-content: flex-end;
@@ -94,12 +127,26 @@
       display: flex;
       align-items: center;
       margin-bottom: 0;
+      /* 标题行内插入返回箭头后补 10px 间距，箭头宽度 34px 远小于 70px 行高，不撑高标题 */
+      gap: 10px;
     }
+    /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+    .page-back { display: inline-flex; align-items: center; justify-content: center;
+                 width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                 color: #6b7280; text-decoration: none; flex-shrink: 0;
+                 transition: background .15s, color .15s; }
+    .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+    html.embedded .page-back { display: none !important; }
   </style>
+  <script>
+    /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+    try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+  </script>
 </head>
 <body style="background-color: white">
 <div class="activity-list">
-  <h2>活动列表</h2>
+  <!-- 返回箭头放在标题行最左侧，由 h2 的 flex 布局与标题同行居中 -->
+  <h2><a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>活动列表</h2>
   <div id="activities">
     <!-- 活动列表将动态插入这里 -->
   </div>
@@ -118,6 +165,8 @@
     var currentPage = 1;
     var pageSize = 10;
     var totalPages;
+    // 活动总数（缓存下来，供删除/结束后判断是否需要回退页码）
+    var totalCount = 0;
     var userToken = localStorage.getItem("token");
 
     // 发送AJAX请求的函数
@@ -143,53 +192,122 @@
             token: userToken
           },
           success: function(result) {
+            if (window.AuthGuard && AuthGuard.handle(result, '查询活动列表')) return;
             if (result.code != 200) {
                 alert("查询活动列表失败！" + result.message);
             } else {
                 var activities = result.data.records; // 假设返回的数据中活动列表字段为 'records'
-                var activitiesHtml = '';
-                var listContainer = document.getElementById('activities');
+                var listContainer = $('#activities');
                 // 在添加新内容前，先清空listContainer
-                listContainer.innerHTML = '';
+                listContainer.empty();
                 activities.forEach(function(activity) {
-                  var url = 'draw.html?activityName='+ encodeURIComponent(activity.activityName)
-                          +'&activityId=' + encodeURIComponent(activity.activityId)
-                          +'&valid=' + encodeURIComponent(activity.valid);
-                  var linkTextActive = `<a href="${url}" target="_blank">活动进行中，去抽奖</a>`;
-                  var linkTextInactive = `<a href="${url}" target="_blank">活动已完成，查看中奖名单</a>`;
+                  var url = 'draw.html?activityName=' + encodeURIComponent(activity.activityName)
+                          + '&activityId=' + encodeURIComponent(activity.activityId)
+                          + '&valid=' + encodeURIComponent(activity.valid);
+                  var linkText = activity.valid ? '活动进行中，去抽奖' : '活动已完成，查看中奖名单';
                   var validClass = activity.valid ? 'active' : 'inactive';
-                  var link = activity.valid ? linkTextActive : linkTextInactive;
-                  activitiesHtml += `
-                      <div class="activity-item">
-                        <div class="activity-info">
-                          <h4>${activity.activityName}</h4>
-                          <p>${activity.description}</p>
-                        </div>
-                        <div class="${validClass}">
-                          <p>${link}</p>
-                        </div>
-                      </div>
-                    `;
+                  var aid = activity.activityId;
+                  var aname = activity.activityName;
+                  // 用 jQuery 构建节点并以 .text()/.attr() 写入，避免活动名/描述中的特殊字符注入
+                  var $ops = $('<div>').addClass(validClass).addClass('act-ops')
+                    .append($('<p>').append(
+                      $('<a>').attr('href', url).attr('target', '_blank').text(linkText)));
+                  // 结束按钮：仅进行中的活动有；已结束的用空占位，避免每行宽度抖动
+                  if (activity.valid) {
+                    $ops.append($('<button type="button" class="btn-mini">')
+                      .text('结束活动')
+                      .on('click', function() { endActivity(aid, aname); }));
+                  } else {
+                    $ops.append($('<span class="op-holder"></span>'));
+                  }
+                  // 删除按钮：确认后调用删除接口
+                  $ops.append($('<button type="button" class="btn-mini danger">')
+                    .text('删除')
+                    .on('click', function() { deleteActivity(aid, aname); }));
+                  listContainer.append($('<div class="activity-item">')
+                    .append($('<div class="activity-info">')
+                      .append($('<h4>').text(activity.activityName))
+                      .append($('<p>').text(activity.description)))
+                    .append($ops));
                 });
-                $('#activities').html(activitiesHtml);
                 // 更新分页控件的总页数
-                totalPages = Math.ceil(result.data.total / pageSize);
+                totalCount = result.data.total || 0;
+                // 活动全部删光时 totalPages 为 0，这里兜底为 1，
+                // 否则跳页逻辑会把页码设成 0 并触发 currentPage 的后端校验失败
+                totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
                 // 更新输入框的值
                 $('#pageInput').val(currentPage);
               } // else end
           },
         error:function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '查询活动列表')) return;
+          // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理真正的传输层错误；
+          // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012：原 err.status==401 永不触发）
           console.log(err);
-          if(err!=null && err.status==401){
-            alert("用户未登录, 即将跳转到登录页!");
-            // 跳转登录页
-            window.location.href = "/blogin.html";
-            window.parent.location.href = "/blogin.html";//让父页面一起跳转
-          }
         }
       });
     }
 
+
+    // 结束活动：确认后置为已完成
+    function endActivity(activityId, activityName) {
+      if (!confirm('确定结束活动「' + activityName + '」吗？\n结束后该活动不可再抽奖，用户端将只能查看中奖名单。')) {
+        return;
+      }
+      $.ajax({
+        url: '/activity/end',
+        type: 'POST',
+        headers: { token: userToken },
+        data: { activityId: activityId },
+        success: function(result) {
+          if (result.code !== 200) {
+            toastr.error(result.message || '结束活动失败');
+            return;
+          }
+          toastr.success('活动已结束');
+          // 可能停在空的尾页，删完最后一条时回退一页
+          refreshAfterChange();
+        },
+        error: function(err) {
+          if (window.AuthGuard && AuthGuard.handle(err, '结束活动')) return;
+          toastr.error('结束活动失败');
+        }
+      });
+    }
+
+    // 删除活动：二次确认（confirm 标题不可控，用更明确的文案）
+    function deleteActivity(activityId, activityName) {
+      if (!confirm('确定删除活动「' + activityName + '」吗？\n该活动的关联奖品、参与人员和中奖记录将一并删除，且不可恢复。')) {
+        return;
+      }
+      $.ajax({
+        url: '/activity/delete',
+        type: 'DELETE',
+        headers: { token: userToken },
+        data: { activityId: activityId },
+        success: function(result) {
+          if (result.code !== 200) {
+            toastr.error(result.message || '删除活动失败');
+            return;
+          }
+          toastr.success('活动已删除');
+          refreshAfterChange();
+        },
+        error: function(err) {
+          if (window.AuthGuard && AuthGuard.handle(err, '删除活动')) return;
+          toastr.error('删除活动失败');
+        }
+      });
+    }
+
+    // 变更后刷新；若当前页已超出新的总页数则回退一页，避免停在空页
+    function refreshAfterChange() {
+      var newTotalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+      if (currentPage > newTotalPages) {
+        currentPage = newTotalPages;
+      }
+      fetchActivities(currentPage);
+    }
 
     function previousPage() {
       if (currentPage > 1) {

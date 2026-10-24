@@ -18,10 +18,64 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.rmi.ServerException;
+import java.util.Set;
 
 @RestControllerAdvice // 全局异常处理类
 public class GlobalExceptionHandler {
     private static final Logger logger= LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * 预期内的业务拒绝错误码（用户输入不合法 / 违反业务规则）。
+     *
+     * <p>修复 BUG-011：{@link ServiceException} 原先**一律**以 ERROR 级别打印完整堆栈，
+     * 导致「邮箱已注册」这类可预期的业务拒绝也产生 ERROR + 50 行堆栈。
+     * 实测证据：2026-09-14 13:35:20 / 13:36:41 应用日志中，
+     * 客户端重复注册（Selenium 用例的账号预置步骤）触发了两次
+     * {@code ERROR GlobalExceptionHandler - 服务异常 ... ServiceException: 邮箱已注册}。
+     *
+     * <p>这些错误码属于「客户端可自行纠正」的拒绝，服务端无故障：
+     * 100~112 人员/短信模块校验失败、113 需管理员权限、114~118 短信与身份校验、
+     * 200~206 活动参数、300/301 奖品参数、400~403 抽奖规则、500 图片参数。
+     * 命中白名单 → WARN 级别，仅记录 code/message，**不打印堆栈**；
+     * 未命中 → 视为服务端真实故障，保持 ERROR + 完整堆栈（便于定位）。
+     *
+     * <p>注意：此处不能用「错误码 &lt; 500 即业务错误」来判定 —— 全局错误码 400/401/403/415
+     * 是 HTTP 语义错误码，与业务错误码数值区间重叠，按区间判定会误判。
+     */
+    private static final Set<Integer> EXPECTED_BUSINESS_ERROR_CODES = Set.of(
+            // 人员模块：输入校验失败
+            100, // 注册失败（入参为空）
+            101, // 邮箱校验失败
+            102, // 手机号校验失败
+            103, // 身份校验失败
+            104, // 密码为空
+            105, // 密码格式错误
+            106, // 邮箱已注册
+            107, // 手机号已注册
+            // 登录 / 用户信息
+            108, // 登录信息不存在
+            109, // 登录不存在
+            110, // 用户信息为空
+            111, // 密码校验失败
+            112, // 验证码校验失败
+            113, // 仅管理员可在后台代建普通用户
+            114, // 该手机号未登记为管理员账号
+            115, // 短信发送过于频繁
+            116, // 短信发送次数已达上限
+            117, // 短信发送失败
+            118, // 该手机号尚未注册
+            // 活动模块：业务规则不满足
+            200, 201, 202, 203, 204, 205, 206,
+            // 奖品模块
+            300,
+            // 抽奖模块
+            400, // 抽奖活动或相关奖品不存在
+            401, // 抽奖活动已结束
+            402, // 活动奖品已被抽取
+            403, // 中奖人员与奖品数量不一致
+            // 图片模块
+            500  // 图片上传失败（文件名为空 / 落盘失败）
+    );
 
     /**
      * 处理参数校验异常 (MethodArgumentNotValidException, BindException)
@@ -58,10 +112,23 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = ServiceException.class)
     public CommonResult<?> serviceException(ServiceException e) {
-        //打印错误日志
-        logger.error("服务异常",e);
+        if (isExpectedBusinessRejection(e.getCode())) {
+            // 可预期的业务拒绝：只需一条可检索的 WARN，不打印堆栈（修复 BUG-011）
+            logger.warn("业务拒绝: code={} message={}", e.getCode(), e.getMessage());
+        } else {
+            // 服务端真实故障：保留完整堆栈便于定位
+            logger.error("服务异常", e);
+        }
         //返回失败结果
         return CommonResult.error(e.getCode(),e.getMessage());
+    }
+
+    /**
+     * 判断是否为预期内的业务拒绝（客户端可自行纠正，服务端无故障）。
+     * 见 {@link #EXPECTED_BUSINESS_ERROR_CODES}。
+     */
+    private static boolean isExpectedBusinessRejection(Integer code) {
+        return code != null && EXPECTED_BUSINESS_ERROR_CODES.contains(code);
     }
 
     @ExceptionHandler(value = ControllerException.class)

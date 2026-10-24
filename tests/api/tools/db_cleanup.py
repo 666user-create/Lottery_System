@@ -15,7 +15,7 @@
 用法：
   python db_cleanup.py                # 干跑（默认，安全）
   python db_cleanup.py --apply        # 执行删除（自动先备份）
-  python db_cleanup.py --apply --backup-dir ..\\..\\docs\\test\\backup
+  python db_cleanup.py --apply --backup-dir <自定义目录>    # 默认备份到 tests/api/db-backup/
 """
 import argparse
 import datetime
@@ -128,9 +128,8 @@ def check_relations() -> bool:
 def main():
     parser = argparse.ArgumentParser(description="测试数据白名单清理（DB 层）")
     parser.add_argument("--apply", action="store_true", help="实际执行删除（默认仅干跑）")
-    parser.add_argument("--backup-dir", default=os.path.join(os.path.dirname(__file__), "..", "..", "..",
-                                                             "docs", "test", "backup"),
-                        help="备份目录")
+    parser.add_argument("--backup-dir", default=os.path.join(os.path.dirname(__file__), "..", "db-backup"),
+                        help="备份目录（默认 tests/api/db-backup/，文件名形如 测试数据清理备份-<YYYYMMDD>-<HHMMSS>-<表名>.sql）")
     args = parser.parse_args()
 
     if not os.path.exists(MYSQL_BIN):
@@ -171,10 +170,20 @@ def main():
     os.makedirs(args.backup_dir, exist_ok=True)
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     print(f"\n[3/4] 备份到 {args.backup_dir}")
+
+    # 只保留最新一批：先清掉上一轮同前缀的备份，避免目录越堆越多
+    prefix = "测试数据清理备份-"
+    old = [f for f in os.listdir(args.backup_dir)
+           if f.startswith(prefix) and f.endswith(".sql")]
+    for f in old:
+        os.remove(os.path.join(args.backup_dir, f))
+    if old:
+        print(f"    已清理上一轮备份 {len(old)} 个（只保留本次）")
+
     for table, where in WHITELIST.items():
         if counts.get(table, "0") == "0":
             continue
-        out_file = os.path.join(args.backup_dir, f"cleanup-{stamp}-{table}.sql")
+        out_file = os.path.join(args.backup_dir, f"{prefix}{stamp}-{table}.sql")
         ok = _run_mysqldump(table, where, out_file)
         size = os.path.getsize(out_file) if os.path.exists(out_file) else 0
         print(f"    {table:<18} → {os.path.basename(out_file)} ({size} bytes) {'OK' if ok else 'FAIL'}")

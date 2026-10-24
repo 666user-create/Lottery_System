@@ -32,6 +32,8 @@ public class FaqController {
     @Autowired private FaqMapper faqMapper;
     @Autowired private FaqEmbeddingMapper faqEmbeddingMapper;
     @Autowired private EmbeddingClient embeddingClient;
+    /** 向量索引服务:FAQ 增删后必须同步索引,否则客服检索不到新知识(修复项) */
+    @Autowired private org.example.lottery_system.service.ai.rag.KnowledgeIndexService knowledgeIndexService;
 
     /**
      * 新增一条 FAQ,自动生成向量
@@ -41,16 +43,26 @@ public class FaqController {
     @PostMapping("/add")
     public CommonResult<Long> add(@Validated @RequestBody FaqDO faqDO) {
         faqMapper.insert(faqDO);
-        // 给问题生成向量;如果向量接口挂了,FAQ 照样能存(用兜底检索),所以 try-catch 包住
+        // faq_embedding 表是 simple 模式的向量存储。
+        // 现在向量来源默认是本地模型(不需要 Key、不产生网络报错),所以两种模式下都同步维护,
+        // 保证任何时候切到 simple 模式,知识库向量都是齐的。
+        if (embeddingClient.isUsable()) {
+            try {
+                double[] vector = embeddingClient.embed(faqDO.getQuestion());
+                FaqEmbeddingDO embeddingDO = new FaqEmbeddingDO();
+                embeddingDO.setFaqId(faqDO.getId());
+                embeddingDO.setEmbedding(MAPPER.writeValueAsString(vector));
+                faqEmbeddingMapper.insert(embeddingDO);
+                log.info("FAQ[{}] 向量生成成功({})", faqDO.getId(), embeddingClient.describe());
+            } catch (Exception e) {
+                log.warn("FAQ[{}] 向量生成失败,simple 模式将走关键词兜底: {}", faqDO.getId(), e.getMessage());
+            }
+        }
+        // 同步更新框架化向量索引(SimpleVectorStore),否则客服检索不到这条新知识
         try {
-            double[] vector = embeddingClient.embed(faqDO.getQuestion());
-            FaqEmbeddingDO embeddingDO = new FaqEmbeddingDO();
-            embeddingDO.setFaqId(faqDO.getId());
-            embeddingDO.setEmbedding(MAPPER.writeValueAsString(vector));
-            faqEmbeddingMapper.insert(embeddingDO);
-            log.info("FAQ[{}] 向量生成成功", faqDO.getId());
+            knowledgeIndexService.addOrUpdateFaq(faqDO);
         } catch (Exception e) {
-            log.error("FAQ[{}] 向量生成失败,先走关键词兜底: {}", faqDO.getId(), e.getMessage());
+            log.error("FAQ[{}] 写入向量索引失败,客服可能暂时检索不到: {}", faqDO.getId(), e.getMessage());
         }
         return CommonResult.success(faqDO.getId());
     }
@@ -60,6 +72,12 @@ public class FaqController {
     public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
         faqMapper.deleteById(id);
         faqEmbeddingMapper.deleteByFaqId(id);
+        // 同步从向量索引移除,否则客服仍会检索到已删除的知识
+        try {
+            knowledgeIndexService.removeFaqFromIndex(id);
+        } catch (Exception e) {
+            log.error("FAQ[{}] 从向量索引移除失败: {}", id, e.getMessage());
+        }
         return CommonResult.success(true);
     }
 

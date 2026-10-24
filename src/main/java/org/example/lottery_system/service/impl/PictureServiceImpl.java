@@ -23,7 +23,9 @@ public class PictureServiceImpl implements PictureService {
         }
         //创建索引
         String fileName=multipartFile.getOriginalFilename();
-        assert fileName!=null;
+        if (fileName == null || fileName.isEmpty()) {
+            throw new ServiceException(ServiceErrorCodeConstants.PIC_ERROR);
+        }
         String suffix=fileName.substring(fileName.lastIndexOf("."));
         fileName= UUID.randomUUID().toString()+suffix;
         //图片保存

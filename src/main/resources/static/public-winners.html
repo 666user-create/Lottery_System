@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中奖名单</title>
+    <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
+    <style>
+        body { background: var(--bg-color); }
+
+        /* ---------- 页面骨架 ----------
+           沿用全站 8px 圆角 + 白卡 + --bg-color 的底色，
+           不引入与其它页面不一致的配色和阴影强度 */
+        .container { margin-top: 30px; margin-bottom: 40px; }
+
+        .header { display: flex; justify-content: space-between; align-items: center;
+                  margin-bottom: 20px; }
+        .header h3 { margin: 0; }
+
+        /* ---------- 顶部说明 ----------
+           原来是 blue→紫的渐变块。渐变在这个页面里没有信息量，
+           只是把一块装饰色铺在最显眼的位置，反而盖过了下面的名单，
+           而且紫色不属于本项目的主色（--blue-color）。
+           改为白卡 + 左侧主色竖条，与 quick-entry 卡片的语言保持一致。 */
+        .page-intro { background: #fff; border-left: 4px solid var(--blue-color);
+                      border-radius: 8px; padding: 20px 24px; margin-bottom: 18px; }
+        .page-intro h4 { font-size: 17px; font-weight: 600; color: #000; margin-bottom: 6px; }
+        .page-intro p { font-size: 14px; color: var(--gray-color); margin: 0; line-height: 22px; }
+
+        /* ---------- 左右分栏 ----------
+           宽屏才分栏：窄屏下左栏会被压到没法读，
+           低于 992px 直接退回上下堆叠（下面 media 里有对应规则）。 */
+        .split { display: flex; gap: 18px; align-items: flex-start; }
+
+        /* 无活动列表可展示（未登录 / 列表为空 / 接口失败）时折叠左栏。
+           用 display:none 而不是宽度归零：归零会留下 18px 的 gap，
+           名单卡左侧仍有一条说不清的空白。 */
+        .split.no-side .picker { display: none; }
+
+        /* 左栏折叠后，把「为什么没有活动列表」摆到名单上方的一行窄提示。
+           它嵌在白色名单卡里，所以用浅色调而不是白底，否则看不出边界。
+           不折叠时始终为空且不占高度。 */
+        .side-hint { display: none; }
+        .split.no-side .side-hint { display: block; background: #f7f9fc;
+                                    border-left: 3px solid var(--blue-color);
+                                    border-radius: 6px; padding: 10px 14px;
+                                    margin-bottom: 18px; font-size: 13px;
+                                    line-height: 20px; color: var(--gray-color); }
+
+        /* ---------- 左侧活动列表 ---------- */
+        .picker { flex: 0 0 250px; background: #fff; border-radius: 8px;
+                  padding: 16px 0 8px; }
+        /* 上边框与白卡等宽但不占 padding，让竖线条正好落在卡片左缘 */
+        .picker-title { font-size: 15px; font-weight: 600; color: #000;
+                        padding: 0 20px 12px; display: flex;
+                        justify-content: space-between; align-items: baseline; }
+        .picker-count { font-size: 12px; font-weight: 400; color: var(--placeholder-color); }
+
+        .act-list { max-height: 520px; overflow-y: auto; }
+        /* 细滚动条：默认样式在窄栏里太抢眼 */
+        .act-list::-webkit-scrollbar { width: 6px; }
+        .act-list::-webkit-scrollbar-thumb { background: #dfe3ec; border-radius: 3px; }
+        .act-list::-webkit-scrollbar-track { background: transparent; }
+
+        .act-btn { display: block; width: 100%; text-align: left;
+                   background: none; border: none; cursor: pointer;
+                   padding: 10px 20px; font-size: 14px; line-height: 20px;
+                   color: var(--gray-color); position: relative;
+                   transition: background .15s, color .15s; }
+        .act-btn:hover { background: #f7f9fc; color: var(--blue-color); }
+        /* 选中态：左侧主色竖线 + 底色变深。
+           竖线用 ::before 绝对定位，不占布局宽度，
+           否则选中时文字会整体右移 3px，看起来在抖。 */
+        .act-btn::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+                           width: 3px; background: transparent; }
+        .act-btn.active { background: #eef3fe; color: var(--blue-color); font-weight: 600; }
+        .act-btn.active::before { background: var(--blue-color); }
+
+        /* 活动名过长时截断，保持每行等高 */
+        .act-btn .nm { display: block; overflow: hidden;
+                       text-overflow: ellipsis; white-space: nowrap; }
+
+        .picker-tip { padding: 4px 20px; font-size: 14px; color: var(--placeholder-color); }
+
+        /* ---------- 名单卡片 ---------- */
+        /* flex:1 而非固定宽度：吃掉左栏之外的剩余空间。
+           min-width:0 是必须的，否则表格的最小内容宽会把
+           flex 项顶破，整个布局横向溢出。 */
+        .list-card { flex: 1 1 auto; min-width: 0; background: #fff;
+                     border-radius: 8px; padding: 22px 24px; }
+        .list-title { display: flex; justify-content: space-between; align-items: baseline;
+                      margin-bottom: 4px; }
+        .list-title .t { font-size: 18px; font-weight: 600; color: #000; }
+        .list-title .c { font-size: 13px; color: var(--placeholder-color); }
+
+        /* ---------- 表格 ----------
+           原表头是浅灰底、单元格只有一条淡边框，行与行之间没有节奏。
+           这里把「一档」的概念显性化：去掉所有边框，只靠行高和悬停底色分隔，
+           密集名单读起来更轻。 */
+        .winner-table { width: 100%; border-collapse: collapse; }
+        .winner-table thead th { background: #f7f9fc; color: var(--gray-color);
+                                 font-weight: 500; font-size: 14px;
+                                 padding: 12px 14px; text-align: left;
+                                 border: none; white-space: nowrap; }
+        /* 表头下方一条实线，给列一个明确的起点 */
+        .winner-table thead tr:first-child th:first-child { border-top-left-radius: 6px; }
+        .winner-table thead tr:first-child th:last-child { border-top-right-radius: 6px; }
+        .winner-table tbody td { font-size: 14px; padding: 14px; color: #222;
+                                 border-bottom: 1px solid #f4f6fa; }
+        .winner-table tbody tr:last-child td { border-bottom: none; }
+        .winner-table tbody tr:hover td { background: #fafbff; }
+
+        /* 名次列：一/二/三等奖是这个页面上唯一有强弱关系的字段，
+           用左侧竖条把它从姓名列里区分出来。
+           padding 留 16px：3px 竖条 + 13px 间隙，贴太近会像删除线 */
+        .rank-cell { position: relative; padding-left: 16px !important; }
+        .rank-cell::before { content: ''; position: absolute; left: 0; top: 50%;
+                             transform: translateY(-50%);
+                             width: 3px; height: 20px; border-radius: 2px;
+                             background: #dfe3ec; }
+        .rank-cell.rank-1::before { background: var(--red-color); }
+        .rank-cell.rank-2::before { background: #fd7e14; }
+        .rank-cell.rank-3::before { background: #1e8e3e; }
+
+        /* 奖项徽标：沿用原配色，只把圆角从 10px 收紧到 6px，
+           与页面其它圆角（8px）成体系 */
+        .tier { display: inline-block; padding: 3px 10px; border-radius: 6px;
+                font-size: 12px; white-space: nowrap; }
+        .tier-first { background: #fdecea; color: #e52822; }
+        .tier-second { background: #fff4e6; color: #fd7e14; }
+        .tier-third { background: #e6f4ea; color: #1e8e3e; }
+        .tier-other { background: #f0f2f7; color: var(--gray-color); }
+
+        .time-cell { color: var(--placeholder-color); font-size: 13px;
+                     font-variant-numeric: tabular-nums; }
+        /* 姓名与奖品是名单的主体信息，给足字重，弱化时间列 */
+        .name-cell { font-weight: 600; color: #000; }
+        .prize-cell { color: #222; }
+
+        .empty { text-align: center; padding: 50px 20px;
+                 color: var(--placeholder-color); font-size: 15px; }
+
+        /* 名单下方的入口：跳到 draw.html 的结果海报（舞台背景版名单） */
+        .list-foot { margin-top: 18px; padding-top: 16px;
+                     border-top: 1px dashed #eee; text-align: right; }
+        .list-foot .draw-link { display: none; font-size: 14px;
+                                color: var(--blue-color); text-decoration: none; }
+        .list-foot .draw-link:hover { text-decoration: underline; }
+
+        /* ---------- 动效 ----------
+           只做名单逐行淡入一处。不引入入场大动画，
+           避免与站内其它页面的观感割裂。 */
+        @keyframes rowIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: none; }
+        }
+        .winner-table tbody tr { animation: rowIn .28s ease-out both; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .winner-table tbody tr { animation: none; }
+        }
+
+        /* ---------- 响应式 ----------
+           992px 以下退回上下堆叠：左栏固定 250px，
+           在平板上会把右边的名单挤到放不下四列。
+           堆叠时左栏不需要很高——给 220px 再加底部渐隐，
+           提示「下面还有」，否则会被截成半行文字看不出是滚动区。 */
+        @media (max-width: 991px) {
+            .split { flex-direction: column; }
+            .picker { flex: 1 1 auto; width: 100%; padding: 16px 0 8px;
+                      position: relative; }
+            .act-list { max-height: 220px; }
+            /* 底部渐隐遮罩，叠在列表上方做出「还有内容」的暗示 */
+            .picker::after { content: ''; position: absolute; left: 0; right: 0;
+                             bottom: 8px; height: 28px; pointer-events: none;
+                             background: linear-gradient(to bottom,
+                                 rgba(255, 255, 255, 0), #fff 85%); }
+            .list-card { width: 100%; }
+        }
+
+        /* 窄屏：表格横向滚动，不压缩列宽导致文字挤成两行 */
+        @media (max-width: 576px) {
+            .list-card, .page-intro { padding-left: 16px; padding-right: 16px; }
+            .picker-title, .act-btn { padding-left: 16px; padding-right: 16px; }
+            .picker-tip { padding-left: 16px; padding-right: 16px; }
+            .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .winner-table { min-width: 480px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h3>中奖名单</h3>
+        <a href="user-lobby.html" class="btn btn-outline-primary btn-sm">返回活动大厅</a>
+    </div>
+
+    <div class="page-intro">
+        <h4>公开中奖名单</h4>
+        <p>选择活动即可查看该活动的全部中奖结果。名单实时同步抽奖结果，无需登录即可查看。</p>
+    </div>
+
+    <!-- 左右分栏：左侧活动列表，右侧名单。
+         活动的视线动线是「先左后右」，分栏正好顺着这个方向走；
+         活动多起来时左栏纵向排布也比一排按钮更好找。
+
+         未登录访客（无活动列表可列）会给 .split 加 .no-side 折叠左栏：
+         这时左栏只有一行登录提示，占着 250px 白白挤压名单，
+         而访客从分享链接进来本就是为了看名单。 -->
+    <div class="split" id="split">
+        <!-- 活动选择器 -->
+        <aside class="picker">
+            <div class="picker-title">选择活动<span class="picker-count" id="actCount"></span></div>
+            <div class="act-list" id="actBtns">
+                <div class="picker-tip">活动加载中...</div>
+            </div>
+        </aside>
+
+        <!-- 中奖名单 -->
+        <main class="list-card">
+            <!-- 左栏折叠时，把「为什么没有活动列表」的原因放这里 -->
+            <div class="side-hint" id="sideHint"></div>
+            <div class="list-title">
+                <span class="t" id="listTitle">中奖名单</span>
+                <span class="c" id="listCount"></span>
+            </div>
+            <div id="listBody">
+                <div class="empty">请先选择一个活动查看中奖名单</div>
+            </div>
+            <div class="list-foot">
+                <a class="draw-link" id="drawLink" href="draw.html">查看结果海报 →</a>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script>
+    /*
+     * 本页是公开页：中奖名单接口 /draw/winning-records/show 无需鉴权，
+     * 因此不挂 auth-guard 的跳转逻辑（否则未登录访客会被踢去登录页，违背「公开」的语义）。
+     *
+     * 但 /activity/find-list 需要登录，所以：
+     *   - 带 token  → 正常列出全部活动供选择
+     *   - 无 token  → 仍可凭 URL 上的 activityId 直接查看该活动名单（真公开能力），
+     *                 只是没有活动选择器，页面给出登录引导
+     */
+    var token = localStorage.getItem('token') || '';
+
+    loadActivities();
+
+    function loadActivities() {
+        var wantId = new URLSearchParams(location.search).get('activityId');
+
+        // 未登录但带了 activityId：直接查该活动，不打扰访客
+        if (!token && wantId) {
+            showNoLoginHint();
+            loadRecords(wantId, '中奖名单');
+            return;
+        }
+
+        $.ajax({
+            url: '/activity/find-list',
+            headers: { token: token },
+            // 只列已结束（COMPLETED）的活动。
+            // 进行中的活动尚未产生中奖结果，列在这里既没内容可看，
+            // 又容易让访客误以为已经开奖，故直接过滤掉。
+            // 同时保留 pageSize=100 一次性取全：按钮区不分页，
+            // 若已结束活动将来超过 100 个，这里会截断，届时需加分页或「加载更多」。
+            data: { currentPage: 1, pageSize: 100, status: 'COMPLETED' },
+            success: function(result) {
+                if (result.code !== 200 || !result.data || !result.data.records) {
+                    // 典型的未登录场景（401 走 error 分支，这里兜住业务码形态）
+                    showNoLoginHint();
+                    return;
+                }
+                var records = result.data.records;
+                if (records.length === 0) {
+                    collapseSide('暂无已结束的活动。只有已结束的活动才有中奖名单可看。');
+                    return;
+                }
+                expandSide();
+                $('#actCount').text(records.length + ' 个');
+                var $box = $('#actBtns').empty();
+                records.forEach(function(a) {
+                    // 侧栏用 .act-btn 而不是 .btn：左侧竖线 + 整行底色
+                    // 需要独占一行的铺满样式，Bootstrap 的 .btn 是内联盒，
+                    // width:100% 之外还要重置内边距，直接用 .btn 反而更麻烦。
+                    // 活动名单用 .text() 写入，不当 HTML 解析。
+                    var $btn = $('<button type="button" class="act-btn">')
+                        .append($('<span class="nm">').text(a.activityName))
+                        .attr('data-id', a.activityId);
+                    $btn.on('click', function() {
+                        markActive($(this));
+                        loadRecords(a.activityId, a.activityName);
+                    });
+                    $box.append($btn);
+                });
+                if (wantId) {
+                    var $target = $('#actBtns button[data-id="' + wantId + '"]');
+                    if ($target.length) {
+                        markActive($target);
+                        // 选中项可能在滚动区外（活动多时），滚进视野，
+                        // 否则右侧名单换了、左侧看不到高亮在哪
+                        $target[0].scrollIntoView({ block: 'nearest' });
+                        loadRecords(wantId, activityNameOf(wantId));
+                    } else {
+                        loadRecords(wantId, '中奖名单');
+                    }
+                }
+            },
+            error: function() {
+                showNoLoginHint();
+            }
+        });
+    }
+
+    // 从已渲染的按钮里回查活动名，避免再多发一次请求
+    function activityNameOf(activityId) {
+        var name = '中奖名单';
+        $('#actBtns button').each(function() {
+            if ($(this).attr('data-id') === String(activityId)) {
+                name = $(this).text();
+                return false;
+            }
+        });
+        return name;
+    }
+
+    function showNoLoginHint() {
+        // 左栏没内容可列，折叠掉，把原因放到名单上方的窄提示里
+        collapseSide('登录后可选择全部活动查看名单；也可以直接用带 activityId 的链接查看指定活动。');
+    }
+
+    // 折叠左栏并在名单上方显示原因
+    function collapseSide(hint) {
+        $('#split').addClass('no-side');
+        $('#sideHint').text(hint || '');
+    }
+
+    // 左栏有内容时恢复分栏（正常登录场景）
+    function expandSide() {
+        $('#split').removeClass('no-side');
+        $('#sideHint').text('');
+    }
+
+    function markActive($btn) {
+        $('#actBtns button').removeClass('active');
+        $btn.addClass('active');
+    }
+
+    function loadRecords(activityId, activityName) {
+        $('#listTitle').text(activityName);
+        $('#listCount').text('');
+        $('#listBody').text('加载中...');
+
+        /* 同步名单下方的「结果海报」入口。
+         * draw.html 带 valid=false 进来时并不会播放抽奖动画（转盘、闪烁人名都要
+         * valid=true 才触发），它只是把中奖名单套在舞台背景上竖排渲染，
+         * 所以叫「海报」而非「现场」，免得访客以为错过了抽奖过程。
+         *
+         * draw.html 依赖这几个参数：
+         *   activityId   —— 查哪个活动
+         *   activityName —— 页面大标题
+         *   valid        —— 传 false 表示「已结束」，直接进名单视图而非抽奖流程
+         *   hideButton   —— 传 true 隐藏上一步/下一步，访客只能看不能翻页
+         * 查询失败时先隐藏，避免残留上一个活动的链接。 */
+        updateDrawLink(activityId, activityName);
+
+        $.ajax({
+            url: '/draw/winning-records/show',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { token: token },
+            data: JSON.stringify({ activityId: activityId }),
+            success: function(result) {
+                if (result.code !== 200) {
+                    $('#listBody').text('查询失败：' + (result.message || '未知错误'));
+                    return;
+                }
+                var records = result.data || [];
+                if (records.length === 0) {
+                    $('#listBody').empty().append(
+                        $('<div class="empty">').text('该活动暂无中奖记录'));
+                    return;
+                }
+                $('#listCount').text('共 ' + records.length + ' 条');
+
+                // .winner-table 而非裸 table：本页的表格样式只作用于名单表，
+                // 不去污染 base.css 里对 table 的全局设置。
+                // 外层再套 .table-scroll，窄屏时横向滚动而不是压扁列宽。
+                var $table = $('<table class="winner-table">').append(
+                    $('<thead>').append($('<tr>')
+                        .append($('<th>').text('中奖时间'))
+                        .append($('<th>').text('中奖人'))
+                        .append($('<th>').text('奖品'))
+                        .append($('<th>').text('奖项'))));
+                var $tbody = $('<tbody>');
+                records.forEach(function(r) {
+                    // 全部用 .text() 写入，姓名/奖品名含特殊字符也不会被当 HTML 解析
+                    // rankClass 只负责左侧竖条的颜色，中奖人列用 rank-cell 让开位置
+                    $tbody.append($('<tr>')
+                        .append($('<td class="time-cell">').text(formatDateTime(r.winningTime)))
+                        .append($('<td class="name-cell rank-cell ' + rankClass(r.prizeTier) + '">')
+                                    .text(r.winnerName || '—'))
+                        .append($('<td class="prize-cell">').text(r.prizeName || '—'))
+                        .append($('<td>').append(tierBadge(r.prizeTier))));
+                });
+                $table.append($tbody);
+                // 逐行淡入用 animation-delay 递推，最多递推到第 12 行：
+                // 名单可能几十行，全部递推会让最后几行迟迟不出现
+                $tbody.children().each(function(i) {
+                    $(this).css('animation-delay', Math.min(i, 12) * 0.03 + 's');
+                });
+                $('#listBody').empty().append($('<div class="table-scroll">').append($table));
+            },
+            error: function() {
+                $('#listBody').text('查询失败，请刷新重试');
+            }
+        });
+    }
+
+    // 组装 draw.html 链接。用 URLSearchParams 而非手工拼字符串，
+    // 避免活动名里出现 & / ? / 中文空格时把参数截断或转义错误。
+    function updateDrawLink(activityId, activityName) {
+        var $link = $('#drawLink');
+        if (!activityId) {
+            $link.hide();
+            return;
+        }
+        var qs = new URLSearchParams({
+            activityId: activityId,
+            activityName: activityName || '中奖名单',
+            valid: 'false',
+            hideButton: 'true'
+        });
+        $link.attr('href', 'draw.html?' + qs.toString()).show();
+    }
+
+    // 左侧竖条的颜色等级。tierBadge 已有一套同样的判断，
+    // 这里单独抽一个是为了让两处保持同一套语义（一/二/三），但互不影响。
+    function rankClass(tier) {
+        if (tier && tier.indexOf('一等奖') >= 0) return 'rank-1';
+        if (tier && tier.indexOf('二等奖') >= 0) return 'rank-2';
+        if (tier && tier.indexOf('三等奖') >= 0) return 'rank-3';
+        return '';
+    }
+
+    function tierBadge(tier) {
+        var cls = 'tier-other';
+        if (tier && tier.indexOf('一等奖') >= 0) cls = 'tier-first';
+        else if (tier && tier.indexOf('二等奖') >= 0) cls = 'tier-second';
+        else if (tier && tier.indexOf('三等奖') >= 0) cls = 'tier-third';
+        return $('<span>').addClass('tier ' + cls).text(tier || '—');
+    }
+
+    function formatDateTime(value) {
+        if (!value) return '—';
+        var d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        function p(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+            p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+</script>
+</body>
+</html>

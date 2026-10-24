@@ -9,11 +9,14 @@
   创建类写操作统一放到第④步，并配套 DB 白名单清理工具后执行。
 """
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code, assert_success, assert_field, assert_paging_params_effective
 
 
+@allure.feature("奖品管理")
+@allure.story("奖品创建/列表/上传关键路径")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestPrizeKeyPath:
@@ -39,6 +42,8 @@ class TestPrizeKeyPath:
         assert_paging_params_effective(p1, p2, hint="[奖品列表分页 pageSize=2]")
 
 
+@allure.feature("奖品管理")
+@allure.story("奖品权限隔离与契约")
 @pytest.mark.keypath
 class TestPrizePermissionAndContract:
 
@@ -66,7 +71,7 @@ class TestPrizePermissionAndContract:
             "prizeName": f"{config.TEST_PREFIX}契约探测奖品", "price": 1})
         assert resp.code != config.Code.SUCCESS or resp.status >= 400, (
             f"[multipart契约] 期望 JSON 调用失败，实际却成功（接口签名可能已变更，"
-            f"请同步 docs/test/contract/api-contract.md）: {resp.brief()}")
+            f"请同步 docs/test/03-测试用例与测试数据设计.md §二）: {resp.brief()}")
         print(f"    [契约] JSON 调用 /prize/create → HTTP={resp.status} code={resp.code}")
 
     def test_upload_pic_requires_admin(self, user_client):

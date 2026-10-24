@@ -16,8 +16,8 @@ import org.example.lottery_system.dao.mapper.*;
 import org.example.lottery_system.service.ActivityService;
 import org.example.lottery_system.service.dto.ActivityDTO;
 import org.example.lottery_system.service.dto.ActivityDetailDTO;
+import org.example.lottery_system.service.dto.ActivityPageDTO;
 import org.example.lottery_system.service.dto.CreateActivityDTO;
-import org.example.lottery_system.service.dto.PageListDTO;
 import org.example.lottery_system.service.enums.ActivityPrizeStatusEnum;
 import org.example.lottery_system.service.enums.ActivityPrizeTiersEnum;
 import org.example.lottery_system.service.enums.ActivityStatusEnum;
@@ -32,6 +32,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -52,6 +53,8 @@ public class ActivityServiceImpl implements ActivityService {
     private ActivityPrizeMapper activityPrizeMapper;
     @Autowired
     private ActivityUserMapper activityUserMapper;
+    @Autowired
+    private WinningRecordMapper winningRecordMapper;
     @Autowired
     private RedisUtil redisUtil;
 
@@ -106,11 +109,21 @@ public class ActivityServiceImpl implements ActivityService {
     }
 
     @Override
-    public PageListDTO<ActivityDTO> findActivityList(PageParam param) {
-        //获取总量
-        int total = activityMapper.count();
-        //获取当前页的列表
-        List<ActivityDO> activityDoList = activityMapper.selectActivityList(param.offset(), param.getPageSize());
+    public ActivityPageDTO findActivityList(PageParam param, String status) {
+        // 非法状态值直接忽略而不是抛错：用户端可能带上过期的筛选参数，
+        // 让它退化为「全部」比整页报错更稳妥
+        String realStatus = null;
+        if (StringUtils.hasText(status) && ActivityStatusEnum.forName(status) != null) {
+            realStatus = status;
+        }
+        // 筛选后的总量，用于分页器算总页数
+        int total = activityMapper.countByStatus(realStatus);
+        int runningCount = activityMapper.countByStatus(ActivityStatusEnum.RUNNING.name());
+        int completedCount = activityMapper.countByStatus(ActivityStatusEnum.COMPLETED.name());
+        // 超出实际页数时返回空列表（如筛选后只剩 1 页却请求第 3 页）
+        List<ActivityDO> activityDoList = param.offset() >= total
+                ? Collections.emptyList()
+                : activityMapper.selectActivityListByStatus(param.offset(), param.getPageSize(), realStatus);
         //转换为DTO
         List<ActivityDTO> activityDTOList = activityDoList.stream().map(activityDO -> {
             ActivityDTO activityDTO = new ActivityDTO();
@@ -120,7 +133,7 @@ public class ActivityServiceImpl implements ActivityService {
             activityDTO.setStatus(ActivityStatusEnum.valueOf(activityDO.getStatus()));
             return activityDTO;
         }).collect(Collectors.toList());
-        return new PageListDTO<>(total, activityDTOList);
+        return new ActivityPageDTO(total, activityDTOList, runningCount, completedCount);
     }
 
     @Override
@@ -302,5 +315,58 @@ public class ActivityServiceImpl implements ActivityService {
                 throw new ServiceException(ServiceErrorCodeConstants.ACTIVITY_PRIZE_TIER_ERROR);
             }
         });
+    }
+
+    /* ============ 活动管理（管理端）============ */
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void endActivity(Long activityId) {
+        ActivityDO activityDO = getActivityDOForUpdate(activityId);
+        // 已是结束态则直接返回，避免重复操作把状态回退
+        if (ActivityStatusEnum.COMPLETED.name().equals(activityDO.getStatus())) {
+            return;
+        }
+        activityMapper.updateStatus(activityId, ActivityStatusEnum.COMPLETED.name());
+        // 同步关联的奖品与人员终态，保证列表与详情口径一致
+        List<ActivityPrizeDO> prizeDOList = activityPrizeMapper.selectByActivityId(activityId);
+        prizeDOList.forEach(prizeDO -> activityPrizeMapper.updateStatus(
+                activityId, prizeDO.getPrizeId(), ActivityPrizeStatusEnum.COMPLETED.name()));
+        List<ActivityUserDO> userDOList = activityUserMapper.selectByActivityId(activityId);
+        if (!CollectionUtils.isEmpty(userDOList)) {
+            List<Long> userIds = userDOList.stream().map(ActivityUserDO::getUserId)
+                    .collect(Collectors.toList());
+            activityUserMapper.batchUpdateStatus(activityId, userIds,
+                    ActivityUserStatusEnum.COMPLETED.name());
+        }
+        // 缓存里存的是旧的活动详情，不清会导致抽奖页仍读到 RUNNING
+        redisUtil.delete(ACTIVITY_PREFIX + activityId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteActivity(Long activityId) {
+        // 先确认活动存在，避免删一个不存在的 id 却返回成功
+        getActivityDOForUpdate(activityId);
+        // 删除顺序：中奖记录 → 关联奖品/人员 → 活动主表
+        // winning_record 虽无外键约束，但留着会成为孤儿数据，
+        // 且公开中奖名单页按 activity_id 查询，会查出已删除活动的中奖人
+        winningRecordMapper.deleteRecords(activityId, null);
+        activityPrizeMapper.deleteByActivityId(activityId);
+        activityUserMapper.deleteByActivityId(activityId);
+        activityMapper.deleteById(activityId);
+        redisUtil.delete(ACTIVITY_PREFIX + activityId);
+    }
+
+    // 取出活动，不存在时抛 404 语义错误
+    private ActivityDO getActivityDOForUpdate(Long activityId) {
+        if (activityId == null) {
+            throw new ServiceException(ServiceErrorCodeConstants.ACTIVITY_ID_IS_EMPTY);
+        }
+        ActivityDO activityDO = activityMapper.selectById(activityId);
+        if (activityDO == null) {
+            throw new ServiceException(ServiceErrorCodeConstants.ACTIVITY_NOT_EXIST);
+        }
+        return activityDO;
     }
 }

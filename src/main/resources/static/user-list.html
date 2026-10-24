@@ -2,9 +2,10 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>人员列表</title>
+    <title>账号列表</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -47,8 +48,23 @@
             height: 70px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
             margin-bottom: 0;
         }
+        /* 「注册用户」由侧边栏导航项改为本页操作按钮：
+           它本质是一个动作，不适合与「人员列表」并列为导航项 */
+        .btn-add {
+            height: 34px;
+            padding: 0 16px;
+            font-size: 14px;
+            font-weight: 400;
+            border: none;
+            border-radius: 4px;
+            background: #4C8DFB;
+            color: #fff;
+            cursor: pointer;
+        }
+        .btn-add:hover { background: #3b7ce8; }
         .table-box{
             height: calc(100vh - 140px);
             overflow-y: auto;
@@ -59,20 +75,12 @@
             padding: 10px;
             height: 50px; /* 统一设置表头和单元格的高度 */
         }
-        /* 第一列和第三列的样式 */
-        .user-table th:first-child, .user-table td:first-child,
-        .user-table th:nth-child(3), .user-table td:nth-child(3),
-        .user-table th:nth-child(5), .user-table td:nth-child(5) {
-            width: 15%; /* 设置第一列和第三列的宽度为15% */
-        }
-        /* 第四列的样式 */
-        .user-table th:nth-child(4), .user-table td:nth-child(4) {
-            width: 30%; /* 设置第四列的宽度为30% */
-        }
-        /* 其他列的样式（例如第二列和第五列） */
-        .user-table th:nth-child(2), .user-table td:nth-child(2) {
-            width: 25%; /* 保持第二列和第五列的宽度为20% */
-        }
+        /* 新表结构：id / 姓名 / 身份 / 状态 / 操作 */
+        .user-table th:nth-child(1), .user-table td:nth-child(1) { width: 10%; }
+        .user-table th:nth-child(2), .user-table td:nth-child(2) { width: 24%; }
+        .user-table th:nth-child(3), .user-table td:nth-child(3) { width: 14%; }
+        .user-table th:nth-child(4), .user-table td:nth-child(4) { width: 18%; }
+        .user-table th:nth-child(5), .user-table td:nth-child(5) { width: 34%; }
         .user-table th {
         /* 如果有特定的样式只适用于表头，可以在这里添加 */
         }
@@ -82,11 +90,53 @@
             white-space: nowrap;
             max-width: 300px;
         }
+        /* 状态徽章 */
+        .status-badge {
+            display: inline-block;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        .status-badge.active { color: #1E8E3E; background: #E7F4EC; }
+        .status-badge.disabled { color: #999; background: #F2F2F2; }
+        /* 操作按钮：与活动列表 .btn-mini 同款，保持管理端视觉统一 */
+        .btn-mini {
+            font-size: 13px;
+            padding: 5px 14px;
+            border-radius: 4px;
+            border: 1px solid #999;
+            background: #fff;
+            color: #666;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all .2s;
+        }
+        .btn-mini:hover { color: #4C8DFB; border-color: #4C8DFB; }
+        .btn-mini.danger { color: #E52822; border-color: #E52822; }
+        .btn-mini.danger:hover { background: #E52822; color: #fff; }
+        /* 自己这一行不能停用：按钮直接禁用，避免点下去才被服务端 130 拒绝 */
+        .btn-mini:disabled { opacity: .45; cursor: not-allowed; }
+        .self-tip { font-size: 12px; color: #999; margin-left: 8px; }
+        /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+        .page-back { display: inline-flex; align-items: center; justify-content: center;
+                     width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                     color: #6b7280; text-decoration: none; flex-shrink: 0;
+                     transition: background .15s, color .15s; }
+        .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        html.embedded .page-back { display: none !important; }
     </style>
+    <script>
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+        try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+    </script>
 </head>
 <body>
 <div class=" user-table">
-    <h2>人员列表</h2>
+    <!-- 返回箭头与标题文字一起归入左侧的 span，
+         避免它成为 h2(justify-content:space-between) 的独立子项、把「+ 注册用户」按钮挤到中间 -->
+    <h2><span style="display: flex; align-items: center; gap: 10px;">
+        <a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>账号列表</span><button class="btn-add" onclick="goRegister()">+ 注册用户</button></h2>
     <div class="table-box">
         <table class="table">
             <thead>
@@ -94,11 +144,12 @@
                 <th>人员id</th>
                 <th>姓名</th>
                 <th>身份</th>
+                <th>状态</th>
+                <th>操作</th>
             </tr>
             </thead>
-            <tbody>
             <tbody id="userList">
-            <!-- 奖品列表将动态插入这里 -->
+            <!-- 用户列表将动态插入这里 -->
             </tbody>
         </table>
     </div>
@@ -108,6 +159,97 @@
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script>
     var token = localStorage.getItem("token");
+
+    // 「注册用户」按钮：跳转到管理端注册表单。
+    // admin-register.html?jumpList=true 是后台 iframe 专用模式（隐藏密码框与身份切换，固定建普通用户），
+    // 注册成功后会 postMessage 让外层 admin.html 把 iframe 切回人员列表。
+    function goRegister() {
+        window.location.href = 'admin-register.html?jumpList=true';
+    }
+
+    /*
+     * 当前登录者 id：用于「自己这一行不给停用按钮」。
+     * 服务端 UserServiceImpl.changeUserStatus 也有同样校验（错误码 130），
+     * 这里只是先一步禁用，避免点下去才被拒。
+     * 注意：这是展示层判断，真正生效靠服务端。
+     */
+    var myUserId = null;
+    function loadMyUserId(done) {
+        $.ajax({
+            url: '/user/me',
+            headers: { token: token },
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '获取用户信息')) return;
+                if (result.code === 200 && result.data) { myUserId = result.data.userId; }
+            },
+            error: function(err) { if (window.AuthGuard && AuthGuard.handle(err, '获取用户信息')) return; },
+            // 无论成败都要渲染列表，否则拿不到 id 时列表会一直不显示
+            complete: function() { done(); }
+        });
+    }
+
+    function buildStatusBadge(status) {
+        var disabled = status === 'DISABLED';
+        return $('<span class="status-badge ' + (disabled ? 'disabled' : 'active') + '">')
+            .text(disabled ? '已停用' : '正常');
+    }
+
+    function buildActionCell(user) {
+        var disabled = user.status === 'DISABLED';
+        var isSelf = myUserId !== null && Number(user.userId) === Number(myUserId);
+        var $wrap = $('<div>');
+
+        // 「详情」：进入 user-detail.html 查看除密码外的全部信息（邮箱/手机/收货信息/时间等）。
+        // 列表保持精简，只放 id/姓名/身份/状态，细节统一收进详情页。
+        $wrap.append(
+            $('<button type="button" class="btn-mini">')
+                .text('详情')
+                .on('click', function() { window.location.href = 'user-detail.html?userId=' + encodeURIComponent(user.userId); })
+        ).append($('<span style="display:inline-block;width:8px;"></span>'));
+
+        var $btn = $('<button type="button" class="btn-mini' + (disabled ? '' : ' danger') + '">')
+            .text(disabled ? '启用' : '停用')
+            .on('click', function() { changeStatus(user.userId, user.userName, disabled); });
+        if (isSelf) {
+            // 自己这一行：按钮禁用。可以照常「启用」，但没必要给自己一个无意义入口。
+            $btn.prop('disabled', true);
+            $wrap.append($btn).append($('<span class="self-tip">当前登录账号</span>'));
+        } else {
+            $wrap.append($btn);
+        }
+        return $wrap;
+    }
+
+    // 停用/启用账号
+    function changeStatus(userId, userName, toEnable) {
+        var next = toEnable ? 'ACTIVE' : 'DISABLED';
+        var action = toEnable ? '启用' : '停用';
+        var warn = toEnable
+            ? '启用后该账号可正常登录。'
+            : '停用后该账号将立即无法登录，且已签发的 token 也会失效；\n其历史中奖、参与记录、审计日志全部保留。';
+        if (!confirm('确定' + action + '「' + userName + '」吗？\n' + warn)) { return; }
+
+        $.ajax({
+            url: '/user/status/update',
+            type: 'POST',
+            headers: { token: token },
+            data: { userId: userId, status: next },
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, action + '账号')) return;
+                if (result.code !== 200) {
+                    alert(action + '失败：' + (result.message || '未知错误'));
+                    return;
+                }
+                fetchUserData();   // 重新拉取，让徽章与按钮同步
+            },
+            error: function(err) {
+                if (window.AuthGuard && AuthGuard.handle(err, action + '账号')) return;
+                var msg = action + '失败';
+                try { if (err.responseJSON && err.responseJSON.message) msg = err.responseJSON.message; } catch (e) {}
+                alert(msg);
+            }
+        });
+    }
 
     // 封装AJAX请求的函数
     function fetchUserData() {
@@ -120,6 +262,7 @@
                 "token":token
             },
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询用户列表')) return;
                 if (result.code != 200) {
                     alert("查询用户列表失败！" + result.message);
                 } else {
@@ -128,28 +271,29 @@
                     var userList = $('#userList');
                     userList.empty();
                     users.forEach(function(user) {
-                        userList.append('<tr> ' +
-                        '<td>' + user.userId + '</td>' +
-                        '<td>' + user.userName + '</td>' +
-                        '<td>' + user.identity + '</td>' +
-                        '</tr>');
+                        // 用 jQuery 构建节点并以 .text() 写入，天然避免 XSS
+                        // （用户名等在注册时由普通用户自行填写，直接拼 innerHTML 可被注入）
+                        userList.append($('<tr>')
+                            .append($('<td>').text(user.userId))
+                            .append($('<td>').text(user.userName))
+                            .append($('<td>').text(user.identity))
+                            .append($('<td>').append(buildStatusBadge(user.status)))
+                            .append($('<td>').append(buildActionCell(user))));
                     });
                 } // else end
             },
             error: function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '查询用户列表')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理真正的传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录, 即将跳转到登录页!");
-                    // 父页面跳转登录页
-                    window.parent.location.href = "/blogin.html";
-                }
             }
         });
     }
 
-    // 初始化加载用户数据
+    // 初始化：先拿自己的 id，再渲染列表（否则「停用自己」那行的按钮状态来不及生效）
     $(document).ready(function() {
-        fetchUserData();
+        loadMyUserId(fetchUserData);
     });
 
 </script>

@@ -15,6 +15,7 @@
 import uuid
 
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code, assert_success
@@ -25,6 +26,8 @@ def _session_id() -> str:
     return f"{config.TEST_PREFIX}sess_{uuid.uuid4().hex[:8]}"
 
 
+@allure.feature("AI 客服")
+@allure.story("AI 对话/RAG/多轮记忆/SSE")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestAiChatKeyPath:
@@ -77,6 +80,8 @@ class TestAiChatKeyPath:
             f"[AI-SSE] 期望响应含 SSE data: 帧，实际未找到：{resp.brief()}")
 
 
+@allure.feature("AI 客服")
+@allure.story("转人工关键词触发")
 @pytest.mark.keypath
 class TestHandoverKeywordKeyPath:
     """转人工闭环：关键词触发 → 工单生成 → 管理端可见（业务链路断点检测）"""

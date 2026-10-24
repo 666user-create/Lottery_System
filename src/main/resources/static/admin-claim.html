@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>奖品发放</title>
+  <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="./js/auth-guard.js?v=20260916"></script>
+  <style>
+    body { background: #f5f6fa; padding: 20px; }
+    .card { border-radius: 10px; }
+    /* ---------- 状态标签:浅色底 + 左侧圆点(与 admin-handover.html 同一套配色) ---------- */
+    .status-tag { display: inline-flex; align-items: center; gap: 5px;
+                  padding: 2px 10px; border-radius: 10px; font-size: 12px;
+                  border: none; white-space: nowrap; }
+    /* 圆点用 CSS 画,不用 emoji;颜色继承标签文字色 */
+    .status-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%;
+                          background: currentColor; flex-shrink: 0; }
+    .status-tag.status-NOT_CLAIMED { background: #fff7e6; color: #b26a00; }
+    .status-tag.status-CLAIMED { background: #e8f2ff; color: #1565c0; }
+    .status-tag.status-SHIPPED { background: #e6f7f9; color: #0e7c8c; }
+    .status-tag.status-COMPLETED { background: #e9f7ef; color: #2e7d32; }
+    /* ---------- 顶部状态筛选:线框胶囊(替代原来的粗边框 btn-group) ---------- */
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+    .filter-bar .status-btn {
+      border: 1px solid #e3e6ea; background: transparent; color: #6b7280;
+      border-radius: 999px; padding: 4px 16px; font-size: 13px; line-height: 1.6;
+      cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+    }
+    .filter-bar .status-btn:hover { background: #f1f3f5; }
+    .filter-bar .status-btn.active { background: #e8f2ff; color: #1565c0; border-color: #1565c0; }
+    /* ---------- 长文本省略:单元格限宽 + 省略号,完整内容放 title 悬停查看 ----------
+       自动表格布局下单元格的 max-width 不生效(列宽由内容决定),所以同时给出 width 兜底 */
+    .cell-ellipsis { max-width: 220px; width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ship { font-size: 12px; color: #666; white-space: nowrap; }
+    .pagination-bar { display: flex; justify-content: flex-end; align-items: center; margin-top: 14px; }
+    .pagination-bar button {
+      margin: 0 3px; border-radius: 5px; border: 1px solid #007bff;
+      background-color: #fff; padding: 3px 9px; cursor: pointer; font-size: 13px;
+    }
+    .pagination-bar button:hover { background: #f0f6ff; }
+    .pagination-bar span { margin: 0 10px; font-size: 14px; }
+    #totalTip { font-size: 13px; color: #999; margin-right: auto; }
+    /* 左上角返回箭头:被外壳 iframe 嵌入时隐藏(由外壳导航),直接打开 URL 时可见 */
+    .page-back { display: inline-flex; align-items: center; justify-content: center;
+                 width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                 color: #6b7280; text-decoration: none; flex-shrink: 0;
+                 transition: background .15s, color .15s; }
+    .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+    html.embedded .page-back { display: none !important; }
+    /* ---------- 行内改状态(保留下拉实现,外观升级为浅色底 + 圆点 + 状态文字色) ----------
+       注意:<select> 上的 ::before/::after 伪元素浏览器不绘制,所以圆点用 radial-gradient 背景图实现 */
+    .status-select { font-size: 13px; padding: 2px 22px 2px 22px; border-radius: 10px;
+                     border: none; cursor: pointer; outline: none;
+                     -webkit-appearance: none; -moz-appearance: none; appearance: none;
+                     /* 左侧 6px 圆点 + 右侧下拉箭头,都是一张背景图,不引入图标库 */
+                     background-repeat: no-repeat, no-repeat;
+                     background-position: left 8px center, right 7px center;
+                     background-size: 8px 8px, 9px 6px;
+                     background-image:
+                       radial-gradient(circle 3px at 4px 50%, currentColor 3px, transparent 3.5px),
+                       url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath fill='%236b7280' d='M0 0h9L4.5 6z'/%3E%3C/svg%3E"); }
+    .status-select.status-NOT_CLAIMED { background-color: #fff7e6; color: #b26a00; }
+    .status-select.status-CLAIMED { background-color: #e8f2ff; color: #1565c0; }
+    .status-select.status-SHIPPED { background-color: #e6f7f9; color: #0e7c8c; }
+    .status-select.status-COMPLETED { background-color: #e9f7ef; color: #2e7d32; }
+    /* ---------- 行内展开的物流输入区(不弹窗) ---------- */
+    .expand-row > td { background: #f8f9fb; padding: 0; }
+    .expand-box { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+                  padding: 12px 16px; border-left: 3px solid #2196f3; }
+    .expand-field { display: flex; flex-direction: column; }
+    .expand-field label { font-size: 12px; color: #666; margin-bottom: 3px; }
+    .expand-field input { width: 210px; }
+    .expand-actions { display: flex; gap: 8px; }
+    .expand-err { flex-basis: 100%; color: #dc3545; font-size: 12px; min-height: 16px; margin-bottom: -8px; }
+    .req { color: #dc3545; }
+    /* ---------- 底部撤销浮条 ---------- */
+    .undo-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 28px; z-index: 2000;
+                  display: none; align-items: center; gap: 16px;
+                  background: #323232; color: #fff; padding: 10px 18px; border-radius: 8px;
+                  font-size: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, .28); }
+    .undo-toast a { color: #7cc4ff; font-weight: 600; text-decoration: none; }
+    .undo-toast a:hover { text-decoration: underline; }
+  </style>
+  <script>
+    /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类,用于隐藏页内返回箭头 */
+    try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h3 class="mb-3" style="display:flex;align-items:center;gap:10px;">
+      <a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>
+      <span>奖品发放</span>
+    </h3>
+    <div class="card p-3 mb-3">
+      <!-- 顶部筛选:线框胶囊,data-status 与点击逻辑保持不变 -->
+      <div class="filter-bar" role="group">
+        <button class="btn status-btn active" data-status="">全部</button>
+        <button class="btn status-btn" data-status="NOT_CLAIMED">未领取</button>
+        <button class="btn status-btn" data-status="CLAIMED">已申请待发货</button>
+        <button class="btn status-btn" data-status="SHIPPED">已发货</button>
+        <button class="btn status-btn" data-status="COMPLETED">已签收</button>
+      </div>
+    </div>
+    <div class="card p-3">
+      <table class="table table-hover table-sm">
+        <thead>
+          <tr>
+            <th>中奖记录ID</th><th>中奖人</th><th>活动</th><th>奖品</th><th>奖项</th>
+            <th>中奖时间</th><th>领奖状态</th><th>物流</th><th style="width:250px;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="pagination-bar">
+        <span id="totalTip"></span>
+        <button type="button" onclick="goPage(1)">首页</button>
+        <button type="button" onclick="goPage(currentPage - 1)">上一页</button>
+        <span>第 <input type="number" id="pageInput" min="1" value="1" style="width:60px;text-align:center;"> / <span id="totalPages">1</span> 页</span>
+        <button type="button" onclick="goPage(currentPage + 1)">下一页</button>
+        <button type="button" onclick="goPage(totalPages)">尾页</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStatus = '';
+    let currentPage = 1;
+    const pageSize = 10;          // 与后端 /api/winning/manage/list 的 pageSize 对齐
+    let totalPages = 1;
+
+    // 页面加载：先尝试拿 token(从 localStorage，登录接口存过)，拿不到则跳转登录页
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('请先登录后再打开本页面');
+      // 与 admin-handover.html 一致：跳登录页并中断后续初始化，
+      // 否则后面还会再弹一个「加载失败」
+      location.assign('admin-login.html');
+    }
+
+    // 状态名 → 中文兜底文案（后端会返回 claimStatusText，缺失时才用这里）
+    const STATUS_TEXT = {
+      'NOT_CLAIMED': '未领取',
+      'CLAIMED': '已申请待发货',
+      'SHIPPED': '已发货',
+      'COMPLETED': '已签收'
+    };
+
+    function loadList() {
+      const url = `/api/winning/manage/list?claimStatus=${encodeURIComponent(currentStatus)}&page=${currentPage}&pageSize=${pageSize}`;
+      fetch(url, { headers: { 'token': token || '' } })
+        .then(r => r.json())
+        .then(res => {
+          // Token 过期时后端返回 {code:401}（HTTP 仍为 200）；403 给出权限提示
+          if (window.AuthGuard && AuthGuard.handle(res, '加载奖品发放列表')) return;
+          if (res.code !== 200) throw new Error(res.message || '未知错误');
+          const data = res.data || {};
+          // 兼容两种分页返回形态：{list,total} 与本项目其他分页接口的 {records,total}
+          render(data.list || data.records || [], data.total || 0);
+        })
+        .catch(e => alert('加载失败: ' + e.message));
+    }
+
+    // 中奖人姓名/活动名/奖品名都可能含用户输入，必须转义后再插入 innerHTML
+    function esc(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+    // 后端 Date 可能是时间戳或 ISO 字符串，两种都兼容；统一按本地时区输出到秒
+    function formatDateTime(value) {
+      if (value === null || value === undefined || value === '') return '-';
+      let d;
+      const raw = String(value);
+      if (/^[0-9]+$/.test(raw)) {
+        // 纯数字按时间戳处理：10 位及以下当秒，13 位当毫秒
+        d = new Date(raw.length <= 10 ? Number(raw) * 1000 : Number(raw));
+      } else {
+        d = new Date(value);
+      }
+      if (isNaN(d.getTime())) return String(value);
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+        pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    function statusText(item) {
+      return item.claimStatusText || STATUS_TEXT[item.claimStatus] || STATUS_TEXT.NOT_CLAIMED;
+    }
+
+    // 状态类名只允许枚举内的四个值，不用后端字符串直接拼 class
+    function statusClass(item) {
+      return STATUS_TEXT[item.claimStatus] ? item.claimStatus : 'NOT_CLAIMED';
+    }
+
+    function shipHtml(item) {
+      if (item.claimStatus !== 'SHIPPED' && item.claimStatus !== 'COMPLETED') return '-';
+      if (!item.shippingCompany && !item.shippingNo) return '-';
+      return '<div class="ship">承运：' + esc(item.shippingCompany || '—') + '</div>' +
+        '<div class="ship">单号：' + esc(item.shippingNo || '—') + '</div>';
+    }
+
+    // 活动名/奖品名可能很长，单元格限宽省略，完整内容放 title 悬停查看
+    function ellipsisCell(value) {
+      const text = (value === null || value === undefined || value === '') ? '-' : String(value);
+      return '<td class="cell-ellipsis" title="' + esc(text) + '">' + esc(text) + '</td>';
+    }
+
+    function render(list, total) {
+      totalPages = Math.max(1, Math.ceil(total / pageSize));
+      // 筛选/重置后当前页可能已越界：回到最后一页重新拉，而不是把空列表当成「暂无数据」展示
+      if (currentPage > totalPages) {
+        currentPage = totalPages;
+        loadList();
+        return;
+      }
+      document.getElementById('totalTip').textContent = '共 ' + total + ' 条';
+      document.getElementById('totalPages').textContent = totalPages;
+      document.getElementById('pageInput').value = currentPage;
+
+      const tbody = document.getElementById('tbody');
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">暂无中奖记录</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(item => `
+        <tr data-row="${esc(item.recordId)}">
+          <td>${esc(item.recordId)}</td>
+          <td>${esc(item.winnerName) || '-'}${item.winnerId ? ' <span class="ship">#' + esc(item.winnerId) + '</span>' : ''}</td>
+          ${ellipsisCell(item.activityName)}
+          ${ellipsisCell(item.prizeName)}
+          <td>${esc(item.prizeTierText || item.prizeTier) || '-'}</td>
+          <td>${esc(formatDateTime(item.winningTime))}</td>
+          <td>${statusSelectHtml(item)}</td>
+          <td>${shipHtml(item)}</td>
+          <td>${actionsHtml(item)}</td>
+        </tr>`).join('');
+
+      // 记住每行"改之前"的状态与物流,底部「撤销」用它还原
+      list.forEach(item => {
+        const id = Number(item.recordId);
+        if (isFinite(id)) {
+          prevState[id] = {
+            status: statusClass(item),
+            shippingCompany: item.shippingCompany || null,
+            shippingNo: item.shippingNo || null
+          };
+        }
+      });
+    }
+
+    // ==================== 行内改状态(①)+ 行内展开 + 撤销(③) ====================
+    // 交互设计:状态用下拉直接改(改完立即生效);需要物流信息时在本行下方展开输入区(不弹窗);
+    // 每次改动底部浮一条「撤销」,6 秒内可撤回——全程没有 prompt / confirm 打断操作。
+
+    /** 每行改之前的状态与物流,供撤销还原 */
+    const prevState = {};
+    let undoTimer = null;
+    let undoPayload = null;
+
+    function statusLabel(s) {
+      return STATUS_TEXT[s] || s;
+    }
+
+    /** 状态列:下拉框(浅色底 + 圆点 + 状态文字色,替代原来的深色实心徽标) */
+    function statusSelectHtml(item) {
+      const id = Number(item.recordId);
+      const cur = statusClass(item);
+      // 已签收 = 终态:换成只读徽标(带提示),不再给下拉 —— 已签收后不允许任何修改
+      if (cur === 'COMPLETED') {
+        return '<span class="status-tag status-COMPLETED" title="已签收,不可再修改">' +
+          esc(statusText(item)) + '</span>';
+      }
+      if (!isFinite(id)) {
+        return '<span class="status-tag status-' + cur + '">' + esc(statusText(item)) + '</span>';
+      }
+      const opts = Object.keys(STATUS_TEXT).map(s =>
+        '<option value="' + s + '"' + (s === cur ? ' selected' : '') + '>' + STATUS_TEXT[s] + '</option>').join('');
+      return '<select class="status-select status-' + cur + '" data-id="' + id + '" onchange="onStatusChange(this)">' +
+        opts + '</select>';
+    }
+
+    // 操作列:只有「已发货 / 已签收」才需要改物流(点开行内编辑)
+    function actionsHtml(item) {
+      const id = Number(item.recordId);
+      if (!isFinite(id)) return '<span class="ship">-</span>';
+      // 只有「已发货」阶段能改物流;已签收说明货已到手,单号不再允许修改
+      // (真要改,得先在状态列把它退回「已发货」,再改 —— 保证状态与物流始终一致)
+      if (item.claimStatus === 'SHIPPED') {
+        return '<button class="btn btn-sm btn-outline-secondary" onclick="openShipEditor(' + id + ')">改物流</button>';
+      }
+      return '<span class="ship">-</span>';
+    }
+
+    /** 下拉变化:选「已发货」需要填物流 → 展开输入区;其他状态直接生效 + 撤销提示 */
+    function onStatusChange(sel) {
+      const id = Number(sel.dataset.id);
+      const next = sel.value;
+      if (next === 'SHIPPED') {
+        openShipEditor(id);
+        return;
+      }
+      submitStatus(id, next, null, '已标记「' + statusLabel(next) + '」');
+    }
+
+    /** 在该行下方展开物流输入区(预填现有值,支持只改单号) */
+    function openShipEditor(id) {
+      closeShipEditor();
+      const tr = document.querySelector('tr[data-row="' + id + '"]');
+      if (!tr) return;
+      const before = prevState[id] || {};
+      const row = document.createElement('tr');
+      row.className = 'expand-row';
+      row.innerHTML =
+        '<td colspan="9">' +
+          '<div class="expand-box">' +
+            '<div class="expand-err" id="expErr"></div>' +
+            '<div class="expand-field"><label>承运公司 <span class="req">*</span></label>' +
+              '<input id="expCompany" class="form-control form-control-sm" placeholder="如：顺丰" value="' +
+              esc(before.shippingCompany || '') + '"></div>' +
+            '<div class="expand-field"><label>物流单号 <span class="req">*</span></label>' +
+              '<input id="expNo" class="form-control form-control-sm" placeholder="如：SF123456789" value="' +
+              esc(before.shippingNo || '') + '"></div>' +
+            '<div class="expand-actions">' +
+              '<button class="btn btn-sm btn-primary" onclick="saveShip(' + id + ')">保存发货</button> ' +
+              '<button class="btn btn-sm btn-secondary" onclick="closeShipEditor(true)">取消</button>' +
+            '</div>' +
+          '</div>' +
+        '</td>';
+      tr.parentNode.insertBefore(row, tr.nextSibling);
+      const input = document.getElementById('expCompany');
+      if (input) input.focus();
+    }
+
+    /** 关闭展开区;reload=true 时重新拉列表(把下拉框恢复成后端真实状态) */
+    function closeShipEditor(reload) {
+      const opened = document.querySelectorAll('.expand-row');
+      for (let i = 0; i < opened.length; i++) opened[i].remove();
+      if (reload) loadList();
+    }
+
+    /** 保存发货:前端先校验必填(后端 606 也会回显在这里) */
+    function saveShip(id) {
+      const company = (document.getElementById('expCompany').value || '').trim();
+      const no = (document.getElementById('expNo').value || '').trim();
+      const err = document.getElementById('expErr');
+      if (!company) { err.textContent = '请填写承运公司'; return; }
+      if (!no) { err.textContent = '请填写物流单号'; return; }
+      err.textContent = '';
+      submitStatus(id, 'SHIPPED', { shippingCompany: company, shippingNo: no }, '已标记「已发货」');
+    }
+
+    /** 提交状态变更:成功 → 弹撤销;失败 → 就地显示原因并拉回真实状态 */
+    function submitStatus(recordId, claimStatus, extra, what) {
+      const body = Object.assign({ recordId: recordId, claimStatus: claimStatus }, extra || {});
+      fetch('/api/winning/manage/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': token || '' },
+        body: JSON.stringify(body)
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (window.AuthGuard && AuthGuard.handle(res, what)) return;
+          if (res.code !== 200) throw new Error(res.message || '未知错误');
+          closeShipEditor(false);
+          // 已签收是终态,不给撤销入口(后端也会拒绝回退)
+          showUndo(recordId, what, claimStatus === 'COMPLETED');
+          loadList();
+        })
+        .catch(e => {
+          const err = document.getElementById('expErr');
+          if (err) { err.textContent = e.message; } else { alert(what + ' 失败：' + e.message); }
+          loadList();
+        });
+    }
+
+    /**
+     * ③ 底部撤销浮条(6 秒)
+     *
+     * @param noUndo true 表示该操作不可撤销(已签收是终态),此时只提示、不给撤销链接
+     */
+    function showUndo(recordId, what, noUndo) {
+      undoPayload = noUndo ? null : { id: recordId };
+      document.getElementById('undoText').textContent = noUndo ? what + '（已签收,不可撤销）' : what;
+      const link = document.getElementById('undoLink');
+      if (link) link.style.display = noUndo ? 'none' : 'inline';
+      document.getElementById('undoToast').style.display = 'flex';
+      if (undoTimer) clearTimeout(undoTimer);
+      undoTimer = setTimeout(hideUndo, noUndo ? 3500 : 6000);
+    }
+
+    function hideUndo() {
+      document.getElementById('undoToast').style.display = 'none';
+      if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; }
+    }
+
+    /** 撤销:恢复到改动之前的状态(含原物流信息) */
+    function doUndo() {
+      if (!undoPayload) { hideUndo(); return; }
+      const id = undoPayload.id;
+      const before = prevState[id] || { status: 'NOT_CLAIMED' };
+      const target = before.status || 'NOT_CLAIMED';
+      const extra = (target === 'SHIPPED' && before.shippingNo)
+        ? { shippingCompany: before.shippingCompany, shippingNo: before.shippingNo }
+        : null;
+      hideUndo();
+      submitStatus(id, target, extra, '已撤销，恢复为「' + statusLabel(target) + '」');
+    }
+
+    function goPage(page) {
+      if (page < 1 || page > totalPages || page === currentPage) return;
+      currentPage = page;
+      loadList();
+    }
+
+    // 状态筛选按钮
+    document.querySelectorAll('.status-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStatus = btn.dataset.status;
+        currentPage = 1;              // 换筛选回到第 1 页，否则可能停在一个越界页码上
+        loadList();
+      });
+    });
+
+    // 页码输入框回车跳转
+    document.getElementById('pageInput').addEventListener('keypress', function (e) {
+      if (e.key !== 'Enter') return;
+      const page = parseInt(this.value, 10);
+      if (!isNaN(page) && page >= 1 && page <= totalPages) { goPage(page); }
+    });
+
+    // 仅在有 token 时加载，避免未登录时产生第二个错误弹窗
+    if (token) {
+      loadList();
+    }
+  </script>
+  <!-- ③ 撤销浮条:改完状态后 6 秒内可一键撤回(替代二次确认弹窗);已签收时不显示撤销链接 -->
+  <div id="undoToast" class="undo-toast">
+    <span id="undoText"></span>
+    <a href="javascript:void(0)" id="undoLink" onclick="doUndo()">撤销</a>
+  </div>
+</body>
+</html>

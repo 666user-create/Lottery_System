@@ -1,41 +1,63 @@
 """
 第④步 · 边界与异常（5/6）：依赖异常
 
-外部依赖现状（application.properties）：
-  RabbitMQ  8.136.222.102:5672  → **实测不可达**（连接超时）
+外部依赖现状（2026-10-11 更新）：
+  RabbitMQ  **已恢复为本机实例**（localhost:5672，RabbitMQ 3.13.7 + Erlang/OTP 26）
+            → 抽奖链路端到端可用；原 BUG-001「MQ 不可达导致阻塞 30s」已消除
+            → 历史：旧配置指向阿里云 8.136.222.102，该实例已释放；后改为 VPC 私网地址亦不可达
   DeepSeek  api.deepseek.com    → 实测可用（第③步已验证）
   Embedding key 为空            → 关键词兜底（正常降级）
   Redis     localhost:8888      → 可用
 
-本文件重点验证「依赖不可用时接口的失败姿态」：
-  期望：**快速失败**（明确错误码，秒级返回）
-  实际：见用例结果（BUG-002 已知：抽奖接口阻塞约 30s）
+本文件重点验证「依赖可用/不可用时接口的姿态」：
+  - MQ 可用   → 抽奖应成功（code=200）且**不阻塞**（防 BUG-001 复发）
+  - MQ 不可用 → 抽奖应**快速失败**（明确错误码，秒级返回），不得挂起 30s
 
 能抓到的缺陷：
   - 依赖不可用导致请求长时间挂起（线程池耗尽风险）
   - 依赖异常未转换为明确业务错误码（客户端无法区分"系统忙"与"参数错"）
 """
+import socket
 import time
 
 import pytest
+import allure
 import requests
 
 from common import config
 from common.client import assert_success
 
+MQ_HOST = "127.0.0.1"
+MQ_PORT = 5672
 
+
+def _mq_reachable(timeout: float = 1.5) -> bool:
+    """探测本机 MQ 端口是否可连（用于按实际环境选择断言分支）"""
+    try:
+        with socket.create_connection((MQ_HOST, MQ_PORT), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+@allure.feature("边界与异常")
+@allure.story("MQ 依赖可用性行为")
 @pytest.mark.boundary
 class TestMqDependency:
 
-    def test_draw_prize_fails_fast_when_mq_unreachable(self, admin_client):
+    def test_draw_prize_succeeds_fast_when_mq_available(self, admin_client):
         """
-        依赖异常（MQ 不可达）：POST /draw/prize 应**快速失败**（≤5s）并返回明确错误码。
+        MQ 可用：POST /draw/prize 应**成功返回 200**，且**不得长时间阻塞**。
 
-        实测事实（BUG-002）：RabbitMQ 不可达时请求阻塞约 30s 后超时，无快速失败机制。
+        背景（BUG-001 的回归防线，2026-10-11 改判）：
+          原用例名为 test_draw_prize_fails_fast_when_mq_unreachable，判定逻辑是
+          「≤5s 返回非 200 才算通过，否则 xfail」——那是 MQ 不可达时期的写法。
+          MQ 恢复后抽奖能真成功（code=200），该判定会误报 xfail，故改为正向断言。
 
-        判定策略（避免"预期失败"污染测试信号）：
-          - 若 ≤5s 返回非 200 → 通过（已具备快速失败）
-          - 若阻塞超时或耗时 >5s → **xfail 记录缺陷**，不阻塞套件为"红"
+          保留的回归价值：**MQ 可用时必须秒级返回**。若将来又出现"依赖异常导致请求挂起"，
+          本用例会因耗时超限而失败，同样能抓住 BUG-001 那类问题。
+
+        MQ 确实不可达时（开发机没起 MQ）：本用例仍按"快速失败"判定，避免误报。
         """
         activity_id = config.BASELINE["activity_id_sample"]
         prize_id = config.BASELINE["prize_id_sample"]
@@ -44,6 +66,7 @@ class TestMqDependency:
             "winningTime": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "winnerList": [{"userId": 1, "userName": "QA边界测试"}],
         }
+        mq_up = _mq_reachable()
         start = time.time()
         timed_out = False
         resp = None
@@ -54,16 +77,20 @@ class TestMqDependency:
             timed_out = True
         elapsed = time.time() - start
 
-        print(f"    [定性] MQ 不可达下的抽奖请求 → 耗时 {elapsed:.1f}s, "
+        print(f"    [定性] MQ{'可用' if mq_up else '不可达'} → 抽奖耗时 {elapsed:.1f}s, "
               f"{'客户端超时' if timed_out else f'HTTP={resp.status} code={resp.code}'}")
 
-        fast_fail_ok = (not timed_out) and elapsed <= 5.0 and resp is not None \
-            and resp.code != config.Code.SUCCESS
+        assert not timed_out, (
+            f"抽奖请求挂起至客户端超时（{elapsed:.1f}s）—— 依赖异常不应阻塞请求线程")
+        assert elapsed <= 5.0, (
+            f"[防阻塞] 抽奖请求耗时 {elapsed:.1f}s > 5s，疑似依赖异常时未快速失败（BUG-001 类问题）")
 
-        if not fast_fail_ok:
-            pytest.xfail(
-                f"BUG-002（P2）：依赖 MQ 不可达时抽奖接口未快速失败"
-                f"（实测耗时 {elapsed:.1f}s，timed_out={timed_out}）")
+        if mq_up:
+            assert resp.code == config.Code.SUCCESS, (
+                f"[MQ 可用] 抽奖应成功返回 code=200，实际 {resp.brief()}")
+        else:
+            assert resp.code != config.Code.SUCCESS, (
+                f"[MQ 不可达] 抽奖应返回明确业务错误码而非假成功，实际 {resp.brief()}")
 
     def test_draw_prize_requires_login(self, anon_client):
         """对照组：未登录调用抽奖 → 401（鉴权先于 MQ 依赖，不应受 MQ 影响）"""
@@ -75,6 +102,8 @@ class TestMqDependency:
             f"[抽奖-未登录] 期望 401（拦截器先于 MQ 调用），实际 {resp.brief()}")
 
 
+@allure.feature("边界与异常")
+@allure.story("外部依赖降级")
 @pytest.mark.boundary
 class TestDegradation:
 

@@ -1,0 +1,31 @@
+## 本机私有配置模板（可入库；复制为 application-local.properties 后填真值）##
+# 用法：
+#   1. 复制本文件为 application-local.properties（同目录，该文件名已被 .gitignore 忽略）
+#   2. 把下面各项填成你本机的真值
+#   3. 启动应用（application.properties 里通过
+#      spring.config.import=optional:classpath:application-local.properties 加载）
+# 也可改用同名系统环境变量覆盖，不必建文件。
+
+# 管理员注册口令（X-Admin-Secret）
+ADMIN_SECRET=
+
+# MySQL 密码（默认 root，见 application.properties）
+DB_PASSWORD=root
+
+# RabbitMQ 密码（默认 admin）
+RABBITMQ_PASSWORD=admin
+
+# 阿里云短信（验证码链路，dypnsapi）
+ALIYUN_SMS_ACCESS_KEY_ID=
+ALIYUN_SMS_ACCESS_KEY_SECRET=
+
+# QQ 邮箱 SMTP（password 填授权码，不是登录密码）
+MAIL_USERNAME=
+MAIL_PASSWORD=
+
+# 短信宝（通知短信，当前 Mock 化，仅保留配置）
+SMSBAO_USERNAME=
+SMSBAO_API_KEY=
+
+# DeepSeek（AI 客服，OpenAI 兼容协议）
+DEEPSEEK_API_KEY=

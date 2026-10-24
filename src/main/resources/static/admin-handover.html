@@ -4,26 +4,89 @@
   <meta charset="UTF-8">
   <title>转人工工单管理</title>
   <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="./js/auth-guard.js?v=20260916"></script>
   <style>
     body { background: #f5f6fa; padding: 20px; }
     .card { border-radius: 10px; }
-    .status-tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; color: #fff; }
-    .status-PENDING { background: #ff9800; }
-    .status-PROCESSING { background: #2196f3; }
-    .status-RESOLVED { background: #4caf50; }
-    .status-CLOSED { background: #9e9e9e; }
+    /* ---------- 状态标签:浅色底 + 左侧圆点(不再是深色实心) ---------- */
+    .status-tag { display: inline-flex; align-items: center; gap: 5px;
+                  padding: 2px 10px; border-radius: 10px; font-size: 12px;
+                  border: none; white-space: nowrap; }
+    /* 圆点用 CSS 画,不用 emoji;颜色继承标签文字色 */
+    .status-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%;
+                          background: currentColor; flex-shrink: 0; }
+    .status-tag.status-PENDING { background: #fff7e6; color: #b26a00; }
+    .status-tag.status-PROCESSING { background: #e8f2ff; color: #1565c0; }
+    .status-tag.status-RESOLVED { background: #e9f7ef; color: #2e7d32; }
+    /* ---------- 顶部状态筛选:线框胶囊(替代原来的粗边框 btn-group) ---------- */
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+    .filter-bar .status-btn {
+      border: 1px solid #e3e6ea; background: transparent; color: #6b7280;
+      border-radius: 999px; padding: 4px 16px; font-size: 13px; line-height: 1.6;
+      cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+    }
+    .filter-bar .status-btn:hover { background: #f1f3f5; }
+    .filter-bar .status-btn.active { background: #e8f2ff; color: #1565c0; border-color: #1565c0; }
+    /* ---------- 长文本省略:单元格限宽 + 省略号,完整内容放 title 悬停查看 ----------
+       自动表格布局下单元格的 max-width 不生效(列宽由内容决定),所以同时给出 width 兜底 */
+    .cell-ellipsis { max-width: 220px; width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* ---------- 删除工单:菜单里的危险项 + 行内红色确认条 ---------- */
+    .more-menu a.menu-danger { color: #dc3545; }
+    .more-menu a.menu-danger:hover { background: #fdecee; }
+    .danger-box { border-left-color: #dc3545; }
+    .delete-tip { flex-basis: 100%; font-size: 13px; color: #b02a37; }
+    /* ---------- 操作列收纳:「更多」文字链接 + 行内展开的下拉菜单 ---------- */
+    .more-wrap { position: relative; display: inline-block; }
+    .more-link { border: none; background: none; padding: 0; font-size: 13px;
+                 color: #1565c0; cursor: pointer; outline: none; white-space: nowrap; }
+    .more-link:hover { color: #0d47a1; text-decoration: underline; }
+    .more-menu { display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+                 min-width: 150px; padding: 4px 0; z-index: 1080;
+                 background: #fff; border: 1px solid #eceff3; border-radius: 8px;
+                 box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+    .more-wrap.open .more-menu { display: block; }
+    /* 操作列单元格不做裁剪,避免下拉被 overflow 剪掉 */
+    td.op-cell { overflow: visible; white-space: nowrap; }
+    .more-menu a { display: block; padding: 7px 14px; font-size: 13px;
+                   color: #333; text-decoration: none; white-space: nowrap; }
+    .more-menu a:hover { background: #f1f3f5; }
+    /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+    .page-back { display: inline-flex; align-items: center; justify-content: center;
+                 width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                 color: #6b7280; text-decoration: none; flex-shrink: 0;
+                 transition: background .15s, color .15s; }
+    .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+    html.embedded .page-back { display: none !important; }
+    /* ---------- 行内处理工单:备注输入区(替代原生 prompt) ---------- */
+    .expand-row > td { background: #f8f9fb; padding: 0; }
+    .expand-box { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+                  padding: 12px 16px; border-left: 3px solid #17a2b8; }
+    .expand-field { display: flex; flex-direction: column; }
+    .expand-field label { font-size: 12px; color: #666; margin-bottom: 3px; }
+    .expand-status { font-size: 14px; font-weight: 600; color: #0e7c8c; padding: 4px 0; }
+    .expand-actions { display: flex; gap: 8px; }
+    .expand-err { flex-basis: 100%; color: #dc3545; font-size: 12px; min-height: 16px; margin-bottom: -8px; }
   </style>
+  <script>
+    /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+    try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+  </script>
 </head>
 <body>
   <div class="container">
-    <h3 class="mb-3">📋 转人工工单管理</h3>
+    <!-- 标题行改为 flex：箭头在最左，右侧放等宽占位，标题文字仍保持水平居中 -->
+    <div class="d-flex align-items-center mb-3">
+      <a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>
+      <h3 class="mb-0 flex-grow-1 text-center">转人工工单管理</h3>
+      <span style="width:34px;flex-shrink:0;"></span>
+    </div>
     <div class="card p-3 mb-3">
-      <div class="btn-group" role="group">
-        <button class="btn btn-outline-primary status-btn active" data-status="">全部</button>
-        <button class="btn btn-outline-warning status-btn" data-status="PENDING">待处理</button>
-        <button class="btn btn-outline-info status-btn" data-status="PROCESSING">处理中</button>
-        <button class="btn btn-outline-success status-btn" data-status="RESOLVED">已解决</button>
-        <button class="btn btn-outline-secondary status-btn" data-status="CLOSED">已关闭</button>
+      <!-- 顶部筛选:线框胶囊,data-status 与点击逻辑保持不变 -->
+      <div class="filter-bar" role="group">
+        <button class="btn status-btn active" data-status="">全部</button>
+        <button class="btn status-btn" data-status="PENDING">待处理</button>
+        <button class="btn status-btn" data-status="PROCESSING">处理中</button>
+        <button class="btn status-btn" data-status="RESOLVED">已解决</button>
       </div>
     </div>
     <div class="card p-3">
@@ -48,14 +111,18 @@
       alert('请先登录后再打开本页面');
       // 修复 BUG-006：原实现仅 alert 未中断流程，导致随后 loadList() 请求 401
       // 再弹第二个"加载失败"弹窗；现改为跳转登录页并中断后续初始化
-      location.assign('blogin.html');
+      location.assign('admin-login.html');
     }
 
     function loadList() {
-      const url = `/api/handover/list?status=${currentStatus}&page=1&pageSize=50`;
+      // 只查「转人工工单」(type=HANDOVER):领奖工单属于「奖品发放」模块,不在本页展示
+      const url = `/api/handover/list?type=HANDOVER&status=${currentStatus}&page=1&pageSize=50`;
       fetch(url, { headers: { 'token': token || '' } })
         .then(r => r.json())
         .then(res => {
+          // 修复 BUG-012：Token 过期时后端返回 {code:401}（HTTP 仍为 200），
+          // 交由 AuthGuard 统一跳登录页；403 给出权限提示。原实现只会弹「加载失败: ...」
+          if (window.AuthGuard && AuthGuard.handle(res, '加载工单列表')) return;
           // 修复 BUG-006：成功码为 200（CommonResult.success），原判断 !== 0 会把成功当失败
           if (res.code !== 200) throw new Error(res.message);
           render(res.data.list || []);
@@ -63,41 +130,227 @@
         .catch(e => alert('加载失败: ' + e.message));
     }
 
-    function render(list) {
-      const tbody = document.getElementById('tbody');
-      tbody.innerHTML = list.map(item => `
-        <tr>
-          <td>${item.id}</td>
-          <td>${item.userId || '-'}</td>
-          <td>${item.sessionId || '-'}</td>
-          <td style="max-width:200px;">${item.question || '-'}</td>
-          <td><span class="status-tag status-${item.status}">${item.status}</span></td>
-          <td>${item.handler || '-'}</td>
-          <td>${item.remark || '-'}</td>
-          <td>${item.gmtCreate || '-'}</td>
-          <td>
-            <button class="btn btn-sm btn-info" onclick="process(${item.id},'PROCESSING')">处理中</button>
-            <button class="btn btn-sm btn-success" onclick="process(${item.id},'RESOLVED')">已解决</button>
-            <button class="btn btn-sm btn-secondary" onclick="process(${item.id},'CLOSED')">关闭</button>
-          </td>
-        </tr>`).join('');
+    // 工单内容是用户自由输入的（转人工时的问题描述），必须转义后再插入 innerHTML
+    function esc(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    function process(id, status) {
-      const remark = prompt('请填写处理备注:');
-      fetch('/api/handover/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'token': token || '' },
-        body: JSON.stringify({ id: id, status: status, remark: remark || '', handler: '管理员' })
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+    // 后端 gmtCreate 是后端直接渲染的 ISO 字符串（如 2026-10-15T16:40:26.000+00:00），
+    // 原来当文本直接输出会带 T/毫秒/时区；现改为按本地时区格式化为 YYYY-MM-DD HH:mm:ss（到秒）
+    function formatDateTime(value) {
+      if (value === null || value === undefined || value === '') return '-';
+      let d;
+      const raw = String(value);
+      if (/^[0-9]+$/.test(raw)) {
+        // 纯数字按时间戳处理：10 位及以下当秒，13 位当毫秒
+        d = new Date(raw.length <= 10 ? Number(raw) * 1000 : Number(raw));
+      } else {
+        d = new Date(value);
+      }
+      if (isNaN(d.getTime())) return String(value);
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+        pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    // 状态 → 中文文案（状态列与行内处理区共用）
+    // 工单只有三种状态:待处理 / 处理中 / 已解决(不再有「已关闭」,需要作废的工单直接删除)
+    function statusLabel(s) {
+      if (s === 'PENDING') return '待处理';
+      if (s === 'PROCESSING') return '处理中';
+      if (s === 'RESOLVED') return '已解决';
+      return s;
+    }
+
+    // 状态类名只允许枚举内的三个值，不用后端字符串直接拼 class（拼错会丢掉配色）
+    function statusClass(item) {
+      const s = item.status;
+      return (s === 'PENDING' || s === 'PROCESSING' || s === 'RESOLVED') ? s : 'PENDING';
+    }
+
+    function render(list) {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = list.map(item => {
+        const sc = statusClass(item);
+        const q = item.question === null || item.question === undefined || item.question === '' ? '-' : item.question;
+        return `
+        <tr data-row="${esc(item.id)}">
+          <td>${esc(item.id)}</td>
+          <td>${esc(item.userId) || '-'}</td>
+          <td>${esc(item.sessionId) || '-'}</td>
+          <td class="cell-ellipsis" title="${esc(q)}">${esc(q)}</td>
+          <td><span class="status-tag status-${sc}">${esc(statusLabel(sc))}</span></td>
+          <td>${esc(item.handler) || '-'}</td>
+          <td>${esc(item.remark) || '-'}</td>
+          <td>${esc(formatDateTime(item.gmtCreate))}</td>
+          <td class="op-cell">
+            <div class="more-wrap">
+              <button type="button" class="more-link" aria-haspopup="true" aria-expanded="false"
+                      onclick="toggleMore(this)">更多 &#8744;</button>
+              <div class="more-menu" role="menu">
+                <a href="javascript:void(0)" role="menuitem"
+                   onclick="pickStatus(${item.id},'PROCESSING')">标记为处理中</a>
+                <a href="javascript:void(0)" role="menuitem"
+                   onclick="pickStatus(${item.id},'RESOLVED')">标记为已解决</a>
+                <a href="javascript:void(0)" role="menuitem" class="menu-danger"
+                   onclick="confirmDelete(${item.id})">删除工单</a>
+              </div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ==================== 操作列下拉菜单(①) ====================
+    // 三个大按钮撑乱行高 → 收成一个「更多 ∨」文字链接；点开在触发元素右下方弹出菜单。
+    // 选中后不弹 prompt/alert，直接走已有的 process() → 行内展开备注区 → saveProcess() 提交。
+
+    /** 打开/收起某一个「更多」菜单（同时只允许开一个） */
+    function toggleMore(btn) {
+      const wrap = btn.parentNode;
+      const willOpen = !wrap.classList.contains('open');
+      closeMoreMenus();
+      if (willOpen) {
+        wrap.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    }
+
+    /** 收起所有「更多」菜单 */
+    function closeMoreMenus() {
+      const wraps = document.querySelectorAll('.more-wrap.open');
+      for (let i = 0; i < wraps.length; i++) {
+        wraps[i].classList.remove('open');
+        const b = wraps[i].querySelector('.more-link');
+        if (b) b.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    /** 菜单项选中：先收起菜单，再调用已有 process(id, status) 走行内备注流程 */
+    function pickStatus(id, status) {
+      closeMoreMenus();
+      process(id, status);
+    }
+
+    // ==================== 删除工单(任何阶段都可删) ====================
+    // 删除是不可逆操作：不用原生 confirm，改成本行下方展开一个红色确认条(就地确认,不打断列表)
+
+    function confirmDelete(id) {
+      closeMoreMenus();
+      closeProcessRow();
+      const tr = document.querySelector('tr[data-row="' + id + '"]');
+      if (!tr) return;
+      const row = document.createElement('tr');
+      row.className = 'expand-row';
+      row.innerHTML =
+        '<td colspan="9">' +
+          '<div class="expand-box danger-box">' +
+            '<div class="expand-err" id="delErr"></div>' +
+            '<div class="delete-tip">删除后不可恢复。</div>' +
+            '<div class="expand-actions">' +
+              '<button class="btn btn-sm btn-danger" onclick="doDelete(' + id + ')">确定删除</button> ' +
+              '<button class="btn btn-sm btn-secondary" onclick="closeProcessRow()">取消</button>' +
+            '</div>' +
+          '</div>' +
+        '</td>';
+      tr.parentNode.insertBefore(row, tr.nextSibling);
+    }
+
+    function doDelete(id) {
+      const err = document.getElementById('delErr');
+      fetch('/api/handover/delete?id=' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: { 'token': token || '' }
       })
         .then(r => r.json())
         .then(res => {
-          // 修复 BUG-006：成功码为 200（CommonResult.success），原判断 !== 0 会把成功当失败
-          if (res.code !== 200) throw new Error(res.message);
-          alert('已更新');
+          if (window.AuthGuard && AuthGuard.handle(res, '删除工单')) return;
+          if (res.code !== 200) throw new Error(res.message || '未知错误');
+          closeProcessRow();
           loadList();
         })
-        .catch(e => alert('操作失败: ' + e.message));
+        .catch(e => {
+          // 失败就地提示,不弹 alert 打断;确认条保留以便重试
+          if (err) { err.textContent = '删除失败：' + e.message; } else { alert('删除失败: ' + e.message); }
+        });
+    }
+
+    // 点空白处关闭；Esc 关闭（捕获阶段，避免被输入框的 Esc 处理抢先）
+    document.addEventListener('click', function (e) {
+      if (e.target.closest ? !e.target.closest('.more-wrap') : true) closeMoreMenus();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'Esc') closeMoreMenus();
+    }, true);
+    // 表格滚动/窗口尺寸变化时菜单位置会失效，直接收起
+    window.addEventListener('scroll', closeMoreMenus, true);
+    window.addEventListener('resize', closeMoreMenus);
+
+    // 行内处理:点击菜单项 → 在本行下方展开备注输入区(替代原生 prompt,不打断操作、上下文还在眼前)
+    function process(id, status) {
+      closeProcessRow();
+      const tr = document.querySelector('tr[data-row="' + id + '"]');
+      if (!tr) return;
+      const row = document.createElement('tr');
+      row.className = 'expand-row';
+      row.innerHTML =
+        '<td colspan="9">' +
+          '<div class="expand-box">' +
+            '<div class="expand-err" id="procErr"></div>' +
+            '<div class="expand-field"><label>目标状态</label>' +
+              '<div class="expand-status">' + statusLabel(status) + '</div></div>' +
+            '<div class="expand-field"><label>处理备注（选填）</label>' +
+              '<input id="procRemark" class="form-control form-control-sm" ' +
+              'placeholder="如：已电话联系用户" style="width:280px;"></div>' +
+            '<div class="expand-actions">' +
+              '<button class="btn btn-sm btn-primary" onclick="saveProcess(' + id + ',\'' + status + '\')">保存</button> ' +
+              '<button class="btn btn-sm btn-secondary" onclick="closeProcessRow()">取消</button>' +
+            '</div>' +
+          '</div>' +
+        '</td>';
+      tr.parentNode.insertBefore(row, tr.nextSibling);
+      const input = document.getElementById('procRemark');
+      if (input) {
+        input.focus();
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') saveProcess(id, status);
+          if (e.key === 'Escape') closeProcessRow();
+        });
+      }
+    }
+
+    function closeProcessRow() {
+      const rows = document.querySelectorAll('.expand-row');
+      for (let i = 0; i < rows.length; i++) rows[i].remove();
+    }
+
+    function saveProcess(id, status) {
+      const remark = (document.getElementById('procRemark').value || '').trim();
+      const err = document.getElementById('procErr');
+      fetch('/api/handover/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': token || '' },
+        body: JSON.stringify({ id: id, status: status, remark: remark, handler: '管理员' })
+      })
+        .then(r => r.json())
+        .then(res => {
+          // 修复 BUG-012：同上，授权失效交由 AuthGuard 处理
+          if (window.AuthGuard && AuthGuard.handle(res, '处理工单')) return;
+          // 修复 BUG-006：成功码为 200（CommonResult.success），原判断 !== 0 会把成功当失败
+          if (res.code !== 200) throw new Error(res.message || '未知错误');
+          closeProcessRow();
+          loadList();
+        })
+        .catch(e => {
+          // 失败就地提示,不再弹 alert 打断;输入内容保留以便重试
+          if (err) { err.textContent = e.message; } else { alert('操作失败: ' + e.message); }
+        });
     }
 
     // 状态筛选按钮

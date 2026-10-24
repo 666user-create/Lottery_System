@@ -1,0 +1,1071 @@
+{
+  "activities-list.html": {
+    "title": "活动列表",
+    "ids": [
+      "activities",
+      "pageInput"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "activity-list",
+      "page-back",
+      "pagination",
+      "op-holder",
+      "danger",
+      "activity-item",
+      "activity-info"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "./js/toastr.min.js?v=20260913"
+    ],
+    "apis": [
+      "/activity/find-list",
+      "/activity/end",
+      "/activity/delete"
+    ],
+    "labels": [
+      "&#8592;",
+      "首页",
+      "上一页",
+      "下一页",
+      "尾页"
+    ],
+    "lines": 349
+  },
+  "admin-claim.html": {
+    "title": "奖品发放",
+    "ids": [
+      "tbody",
+      "totalTip",
+      "pageInput",
+      "totalPages",
+      "' + id + '",
+      "expErr",
+      "expCompany",
+      "expNo",
+      "undoToast",
+      "undoText",
+      "undoLink"
+    ],
+    "names": [],
+    "data": [
+      "data-status",
+      "data-row",
+      "data-id"
+    ],
+    "classes": [
+      "page-back",
+      "card",
+      "filter-bar",
+      "btn",
+      "status-btn",
+      "table",
+      "pagination-bar",
+      "ship",
+      "cell-ellipsis",
+      "status-tag",
+      "status-COMPLETED",
+      "status-'",
+      "cur",
+      "status-select",
+      "expand-box",
+      "expand-err",
+      "expand-field",
+      "req",
+      "expand-actions",
+      "undo-toast"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916"
+    ],
+    "apis": [
+      "/api/winning/manage/status"
+    ],
+    "labels": [
+      "&#8592;",
+      "全部",
+      "未领取",
+      "已申请待发货",
+      "已发货",
+      "已签收",
+      "首页",
+      "上一页",
+      "下一页",
+      "尾页",
+      "改物流",
+      "保存发货",
+      "取消",
+      "撤销"
+    ],
+    "lines": 451
+  },
+  "admin-handover.html": {
+    "title": "转人工工单管理",
+    "ids": [
+      "tbody",
+      "delErr",
+      "procErr",
+      "procRemark"
+    ],
+    "names": [],
+    "data": [
+      "data-status",
+      "data-row"
+    ],
+    "classes": [
+      "page-back",
+      "card",
+      "filter-bar",
+      "btn",
+      "status-btn",
+      "table",
+      "cell-ellipsis",
+      "status-tag",
+      "status-${sc}",
+      "op-cell",
+      "more-wrap",
+      "more-link",
+      "more-menu",
+      "menu-danger",
+      "expand-box",
+      "danger-box",
+      "expand-err",
+      "delete-tip",
+      "expand-actions",
+      "expand-field",
+      "expand-status"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916"
+    ],
+    "apis": [
+      "/api/handover/process"
+    ],
+    "labels": [
+      "&#8592;",
+      "全部",
+      "待处理",
+      "处理中",
+      "已解决",
+      "更多 &#8744;",
+      "标记为处理中",
+      "标记为已解决",
+      "删除工单",
+      "确定删除",
+      "取消",
+      "保存"
+    ],
+    "lines": 373
+  },
+  "admin-login.html": {
+    "title": "管理员登录",
+    "ids": [
+      "loginForm",
+      "phoneNumber",
+      "password",
+      "pwdServerMsg",
+      "codeForm",
+      "loginMobile",
+      "verificationCode",
+      "getVerificationCode",
+      "codeServerMsg"
+    ],
+    "names": [
+      "viewport",
+      "phoneNumber",
+      "password",
+      "loginMobile",
+      "verificationCode"
+    ],
+    "data": [
+      "data-form"
+    ],
+    "classes": [
+      "login-page",
+      "login-box",
+      "img-box",
+      "ll-slogan",
+      "ll-list",
+      "ll-item",
+      "dot",
+      "sub",
+      "login-container",
+      "tab-box",
+      "tab-span",
+      "btn",
+      "login-btn",
+      "server-msg",
+      "code-box",
+      "register-link"
+    ],
+    "scripts": [
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js",
+      "https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js",
+      "./js/toastr.min.js?v=20260913"
+    ],
+    "apis": [
+      "/user/password/login",
+      "/user/verification-code/send",
+      "/user/message/login"
+    ],
+    "labels": [
+      "登录",
+      "注册管理员"
+    ],
+    "lines": 273
+  },
+  "admin-register.html": {
+    "title": "注册页面",
+    "ids": [
+      "registerForm",
+      "name",
+      "mail",
+      "phoneNumber",
+      "password",
+      "secretGroup",
+      "adminSecret",
+      "toggleAdmin"
+    ],
+    "names": [
+      "name",
+      "mail",
+      "phoneNumber",
+      "password",
+      "adminSecret"
+    ],
+    "data": [],
+    "classes": [
+      "register-container",
+      "btn"
+    ],
+    "scripts": [
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js",
+      "https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"
+    ],
+    "apis": [
+      "/user/register"
+    ],
+    "labels": [
+      "切换为管理员注册",
+      "注册"
+    ],
+    "lines": 223
+  },
+  "admin.html": {
+    "title": "后台管理",
+    "ids": [
+      "activitiesList",
+      "createActivity",
+      "userList",
+      "accountCenter",
+      "faqManage",
+      "handoverManage",
+      "claimManage",
+      "aiChatEntry",
+      "statisticsPage",
+      "operationLogPage",
+      "contentFrame"
+    ],
+    "names": [],
+    "data": [
+      "data-desc",
+      "data-url"
+    ],
+    "classes": [
+      "admin-page",
+      "header-box",
+      "logo-box",
+      "user-box",
+      "gray",
+      "cont-box",
+      "sidebar",
+      "nav",
+      "huodong",
+      "white-img",
+      "gray-img",
+      "sub-category",
+      "jiangpin",
+      "renyuan",
+      "kefu",
+      "tongji",
+      "main-content",
+      "iframe-styles"
+    ],
+    "scripts": [
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [],
+    "labels": [
+      "活动列表",
+      "新建抽奖活动",
+      "奖品列表",
+      "创建奖品",
+      "账号列表",
+      "个人中心",
+      "FAQ 知识库",
+      "转人工工单",
+      "奖品发放",
+      "AI 客服对话",
+      "活动数据统计",
+      "操作日志"
+    ],
+    "lines": 347
+  },
+  "chat.html": {
+    "title": "小东智能客服",
+    "ids": [
+      "chatBody",
+      "input",
+      "sendBtn",
+      "handoverBtn"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "chat-box",
+      "chat-header",
+      "page-back",
+      "chat-body",
+      "msg",
+      "bubble",
+      "chat-footer"
+    ],
+    "scripts": [],
+    "apis": [
+      "/api/ai/chat",
+      "/api/handover/create"
+    ],
+    "labels": [
+      "&#8592;",
+      "发送",
+      "转人工"
+    ],
+    "lines": 179
+  },
+  "create-activity.html": {
+    "title": "创建抽奖活动",
+    "ids": [
+      "activityForm",
+      "activityName",
+      "description",
+      "buttonPrizes",
+      "buttonUsers",
+      "createActivity",
+      "prizesModal",
+      "prizesContainer",
+      "usersModal",
+      "usersContainer"
+    ],
+    "names": [
+      "activityName",
+      "description"
+    ],
+    "data": [],
+    "classes": [
+      "page-back",
+      "desc-row",
+      "btn",
+      "pre-btn",
+      "toast",
+      "modal",
+      "close",
+      "prize-item",
+      "custom-p",
+      "user-tag-admin",
+      "user-item",
+      "user-empty"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js",
+      "./js/toastr.min.js?v=20260913"
+    ],
+    "apis": [
+      "/prize/find-list",
+      "/user/base-user/find-list",
+      "/activity/create"
+    ],
+    "labels": [
+      "&#8592;",
+      "圈选奖品",
+      "圈选人员",
+      "创建活动",
+      "取消",
+      "确定"
+    ],
+    "lines": 494
+  },
+  "create-prizes.html": {
+    "title": "创建奖品",
+    "ids": [
+      "prizeRows",
+      "prizeName",
+      "previewImg",
+      "prizeImageUrl",
+      "price",
+      "description"
+    ],
+    "names": [
+      "prizeName",
+      "price",
+      "description"
+    ],
+    "data": [],
+    "classes": [
+      "title-row",
+      "page-back",
+      "prize-row",
+      "prize-name",
+      "img-upload",
+      "upload-box",
+      "plus",
+      "up-txt",
+      "preview-img",
+      "prize-price",
+      "prize-description",
+      "btn"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/prize/create"
+    ],
+    "labels": [
+      "&#8592;",
+      "创建奖品"
+    ],
+    "lines": 264
+  },
+  "draw.html": {
+    "title": "抽奖页面",
+    "ids": [
+      "container",
+      "title",
+      "disc",
+      "image",
+      "list"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "opt-box",
+      "btn",
+      "pre-btn",
+      "next-btn"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/draw/winning-records/show",
+      "/draw/prize",
+      "/activity/detail/find"
+    ],
+    "labels": [],
+    "lines": 764
+  },
+  "faq-management.html": {
+    "title": "FAQ 知识库管理",
+    "ids": [
+      "question",
+      "category",
+      "answer",
+      "faqTableBody",
+      "totalTip",
+      "pageInput"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "page-back",
+      "panel",
+      "field",
+      "grow",
+      "fixed",
+      "empty-tip",
+      "pagination-bar",
+      "left"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/api/faq/list",
+      "/api/faq/add",
+      "/api/faq/delete"
+    ],
+    "labels": [
+      "&#8592;",
+      "新增",
+      "清空",
+      "首页",
+      "上一页",
+      "下一页",
+      "尾页",
+      "删除"
+    ],
+    "lines": 366
+  },
+  "nav.html": {
+    "title": "抽奖系统 · 页面导航",
+    "ids": [
+      "loginState",
+      "now",
+      "q"
+    ],
+    "names": [
+      "viewport"
+    ],
+    "data": [],
+    "classes": [
+      "meta",
+      "chip",
+      "off",
+      "clear",
+      "filter",
+      "hint",
+      "b-pub",
+      "b-login",
+      "b-admin",
+      "grid",
+      "card",
+      "name",
+      "path",
+      "note",
+      "api"
+    ],
+    "scripts": [],
+    "apis": [],
+    "labels": [
+      "清除登录态"
+    ],
+    "lines": 206
+  },
+  "operation-log.html": {
+    "title": "操作日志",
+    "ids": [
+      "moduleSelect",
+      "identitySelect",
+      "startTime",
+      "endTime",
+      "logTableBody",
+      "totalTip",
+      "pageInput"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "page-back",
+      "panel",
+      "filter-bar",
+      "field",
+      "empty-tip",
+      "pagination-bar",
+      "tag",
+      "tag-ok",
+      "tag-fail",
+      "msg",
+      "tag-warn",
+      "left",
+      "path"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/api/operation-log/list"
+    ],
+    "labels": [
+      "&#8592;",
+      "查询",
+      "重置",
+      "首页",
+      "上一页",
+      "下一页",
+      "尾页"
+    ],
+    "lines": 427
+  },
+  "prizes-list.html": {
+    "title": "奖品列表",
+    "ids": [
+      "prizes",
+      "pageInput"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "prize-list",
+      "page-back",
+      "pagination",
+      "prize-empty",
+      "prize-info",
+      "prize-thumb",
+      "prize-text",
+      "prize-meta",
+      "prize-ops",
+      "prize-price",
+      "danger",
+      "prize-item"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "./js/toastr.min.js?v=20260913"
+    ],
+    "apis": [
+      "/prize/find-list",
+      "/prize/delete"
+    ],
+    "labels": [
+      "&#8592;",
+      "首页",
+      "上一页",
+      "下一页",
+      "尾页"
+    ],
+    "lines": 315
+  },
+  "public-winners.html": {
+    "title": "中奖名单",
+    "ids": [
+      "split",
+      "actCount",
+      "actBtns",
+      "sideHint",
+      "listTitle",
+      "listCount",
+      "listBody",
+      "drawLink"
+    ],
+    "names": [
+      "viewport"
+    ],
+    "data": [
+      "data-id"
+    ],
+    "classes": [
+      "header",
+      "btn",
+      "page-intro",
+      "split",
+      "picker",
+      "picker-title",
+      "picker-count",
+      "act-list",
+      "picker-tip",
+      "side-hint",
+      "empty",
+      "draw-link",
+      "act-btn",
+      "winner-table",
+      "time-cell",
+      "name-cell",
+      "rank-cell",
+      "rankClass(r.prizeTier)",
+      "prize-cell"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/activity/find-list",
+      "/draw/winning-records/show"
+    ],
+    "labels": [
+      "返回活动大厅",
+      "查看结果海报 →"
+    ],
+    "lines": 469
+  },
+  "statistics.html": {
+    "title": "数据统计",
+    "ids": [
+      "overviewCards",
+      "tierTableBody",
+      "activitySelect",
+      "activitySummary",
+      "prizeStatTableBody"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "page-back",
+      "stat-card",
+      "label",
+      "value",
+      "panel",
+      "empty-tip",
+      "activity-bar",
+      "progress",
+      "progress-bar",
+      "pct",
+      "unit",
+      "summary-metrics",
+      "item"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/api/stat/overview",
+      "/activity/find-list",
+      "/api/stat/activity"
+    ],
+    "labels": [
+      "&#8592;"
+    ],
+    "lines": 422
+  },
+  "user-list.html": {
+    "title": "账号列表",
+    "ids": [
+      "userList"
+    ],
+    "names": [],
+    "data": [],
+    "classes": [
+      "user-table",
+      "page-back",
+      "table",
+      "status-badge",
+      "(disabled",
+      "'disabled'",
+      "'active')",
+      "danger')",
+      "self-tip"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"
+    ],
+    "apis": [
+      "/user/me",
+      "/user/status/update",
+      "/user/base-user/find-list"
+    ],
+    "labels": [
+      "&#8592;",
+      "+ 注册用户"
+    ],
+    "lines": 293
+  },
+  "user-lobby.html": {
+    "title": "活动大厅",
+    "ids": [
+      "userName",
+      "statRunning",
+      "statEnded",
+      "statMyWins",
+      "actSection",
+      "actTitle",
+      "actFilterNote",
+      "activityList",
+      "actPager",
+      "qeProfileDesc",
+      "xiaoDongFab",
+      "xiaoDongChat",
+      "chatMessages",
+      "chatInput",
+      "activityDetailModal",
+      "modalTitle",
+      "modalBody"
+    ],
+    "names": [
+      "viewport"
+    ],
+    "data": [
+      "data-dismiss"
+    ],
+    "classes": [
+      "hero",
+      "hero-left",
+      "hero-title",
+      "hero-sub",
+      "hero-user",
+      "who",
+      "btn",
+      "stats",
+      "stat-card",
+      "stat-1",
+      "clickable",
+      "bar",
+      "stat-2",
+      "stat-3",
+      "sec",
+      "sec-head",
+      "sec-title",
+      "sec-note",
+      "act-grid",
+      "load-tip",
+      "act-pager",
+      "quick-entry",
+      "qe-card",
+      "qe-winners",
+      "qe-body",
+      "qe-t",
+      "qe-d",
+      "qe-arrow",
+      "qe-profile",
+      "qe-chat",
+      "fab-btn",
+      "fab-icon",
+      "chat-header",
+      "close-btn",
+      "chat-messages",
+      "msg",
+      "bot",
+      "chat-input",
+      "modal",
+      "close",
+      "act-card",
+      "act-info",
+      "desc",
+      "act-right",
+      "tier",
+      "tierClass(r.prizeTier)",
+      "claim-badge",
+      "claim-'",
+      "status",
+      "ship-info",
+      "claim-tip",
+      "act-status",
+      "page-btn",
+      "page-info",
+      "empty",
+      "user",
+      "typing"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"
+    ],
+    "apis": [
+      "/user/me",
+      "/activity/find-list",
+      "/user/receiver-info",
+      "/api/winning/claim",
+      "/api/winning/confirm",
+      "/activity/detail/find",
+      "/draw/my-records",
+      "/api/ai/chat"
+    ],
+    "labels": [
+      "退出登录",
+      "完整对话页 →",
+      "&times;",
+      "去个人中心补全 →"
+    ],
+    "lines": 853
+  },
+  "user-login.html": {
+    "title": "用户登录",
+    "ids": [
+      "loginForm",
+      "phoneNumber",
+      "password",
+      "pwdServerMsg",
+      "codeForm",
+      "loginMobile",
+      "verificationCode",
+      "getVerificationCode",
+      "codeServerMsg"
+    ],
+    "names": [
+      "viewport",
+      "phoneNumber",
+      "password",
+      "loginMobile",
+      "verificationCode"
+    ],
+    "data": [
+      "data-form"
+    ],
+    "classes": [
+      "login-page",
+      "login-box",
+      "img-box",
+      "ll-slogan",
+      "ll-list",
+      "ll-item",
+      "dot",
+      "sub",
+      "login-container",
+      "tab-box",
+      "tab-span",
+      "btn",
+      "login-btn",
+      "server-msg",
+      "code-box",
+      "register-link"
+    ],
+    "scripts": [
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js",
+      "https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js",
+      "./js/toastr.min.js?v=20260913"
+    ],
+    "apis": [
+      "/user/password/login",
+      "/user/verification-code/send",
+      "/user/message/login"
+    ],
+    "labels": [
+      "登录",
+      "注册用户"
+    ],
+    "lines": 216
+  },
+  "user-profile.html": {
+    "title": "个人中心",
+    "ids": [
+      "userName",
+      "avatar",
+      "nameText",
+      "vUserName",
+      "vUserId",
+      "vIdentity",
+      "receiverName",
+      "receiverPhone",
+      "receiverAddress",
+      "receiverErr",
+      "receiverSubmit",
+      "emailModal",
+      "curEmail",
+      "newEmail",
+      "emailErr",
+      "emailPwdPane",
+      "emailOldPwd",
+      "emailSecretPane",
+      "emailSecret",
+      "emailCodePane",
+      "emailCode",
+      "emailSendCode",
+      "emailCodeHint",
+      "emailFormErr",
+      "emailSubmit",
+      "pwdModal",
+      "pwdOldPane",
+      "pwdOldPwd",
+      "pwdSecretPane",
+      "pwdSecret",
+      "pwdCodePane",
+      "pwdCode",
+      "pwdSendCode",
+      "pwdCodeHint",
+      "newPwd",
+      "newPwd2",
+      "pwdFormErr",
+      "pwdSubmit"
+    ],
+    "names": [
+      "viewport",
+      "emailVerify",
+      "pwdVerify"
+    ],
+    "data": [
+      "data-dismiss"
+    ],
+    "classes": [
+      "header",
+      "back-arrow",
+      "user-flow-only",
+      "user-info",
+      "btn",
+      "profile-card",
+      "profile-top",
+      "avatar",
+      "profile-meta",
+      "name",
+      "sub",
+      "info-row",
+      "label",
+      "value",
+      "sec-title",
+      "action-item",
+      "req",
+      "hint",
+      "modal",
+      "close",
+      "field-error",
+      "verify-box",
+      "verify-opt",
+      "admin-only",
+      "verify-pane",
+      "code-row"
+    ],
+    "scripts": [
+      "./js/auth-guard.js?v=20260916",
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js",
+      "https://cdn.staticfile.org/toastr.js/2.1.4/toastr.min.js"
+    ],
+    "apis": [
+      "/user/me",
+      "/user/account/security",
+      "/user/security/verification-code/send",
+      "/user/email/update",
+      "/user/password/update",
+      "/user/receiver-info"
+    ],
+    "labels": [
+      "&#8592;",
+      "退出登录",
+      "修改",
+      "保存收货地址",
+      "获取验证码",
+      "取消",
+      "确认修改"
+    ],
+    "lines": 636
+  },
+  "user-register.html": {
+    "title": "用户注册",
+    "ids": [
+      "registerForm",
+      "name",
+      "mail",
+      "phoneNumber",
+      "password"
+    ],
+    "names": [
+      "viewport",
+      "name",
+      "mail",
+      "phoneNumber",
+      "password"
+    ],
+    "data": [],
+    "classes": [
+      "register-container",
+      "btn",
+      "back-link"
+    ],
+    "scripts": [
+      "https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js",
+      "https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"
+    ],
+    "apis": [
+      "/user/register"
+    ],
+    "labels": [
+      "注册",
+      "去登录"
+    ],
+    "lines": 95
+  }
+}

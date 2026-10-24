@@ -3,97 +3,302 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>活动大厅 - 抽奖系统</title>
+    <title>活动大厅</title>
     <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/base.css?v=20260913">
-    <link rel="stylesheet" href="./css/toastr.min.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
     <style>
-        .container { margin-top: 30px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .header h3 { margin: 0; }
-        .user-info { color: #666; font-size: 14px; }
-        .user-info span { margin-right: 15px; }
-        .tab-nav { margin-bottom: 20px; }
-        .tab-nav .nav-link { cursor: pointer; }
-        .activity-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: box-shadow 0.2s; }
-        .activity-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-        .activity-card h5 { color: #333; margin-bottom: 8px; }
-        .activity-card .desc { color: #666; font-size: 14px; }
-        .activity-card .meta { margin-top: 8px; font-size: 13px; color: #999; }
-        .activity-card .meta .badge { font-size: 12px; }
-        .prize-item { border-left: 3px solid #007bff; padding-left: 12px; margin: 8px 0; }
-        .prize-item.first { border-left-color: #dc3545; }
-        .prize-item.second { border-left-color: #fd7e14; }
-        .prize-item.third { border-left-color: #28a745; }
-        .prize-item .tier-badge { font-size: 11px; padding: 2px 6px; }
-        .record-table { font-size: 14px; }
-        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
-        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
-        .btn-sm-action { padding: 2px 10px; font-size: 12px; }
-        /* 小东助手气泡 */
+        /* ============================================================
+         * 视觉规范：对齐管理端（activities-list.html / admin.html）
+         *   - 背景 #f2f2f2，内容块 #fff，行块 #f7f7f7
+         *   - 圆角统一 8px（--border-radius），不加厚重阴影
+         *   - 主色 --blue-color，强调色仅用于状态与关键数值
+         *   - 不使用装饰性色块/光斑，保持与后台一致的朴素观感
+         * ============================================================ */
+        body { background-color: #f2f2f2; font-family: PingFangSC, PingFang SC, sans-serif; }
+        .container { margin-top: 0; padding: 30px; max-width: 1280px; }
+
+        /* ---------- 顶部欢迎栏（原 hero，弱化为普通标题栏）---------- */
+        /* 去掉渐变底、光斑与胶囊按钮，改成与管理端一致的
+           白底标题区 + 右侧用户信息，只保留一处蓝色主按钮作为主操作 */
+        .hero { background: #fff; border-radius: 8px; padding: 24px 30px; margin-bottom: 20px;
+                display: flex; align-items: flex-start; justify-content: space-between; }
+        .hero-left { min-width: 0; }
+        .hero .hero-title { font-size: 20px; font-weight: 600; color: #000; }
+        .hero .hero-sub { font-size: 14px; color: var(--gray-color); margin-top: 6px; }
+        .hero .hero-user { text-align: right; font-size: 14px; flex-shrink: 0; margin-left: 20px; }
+        .hero .hero-user .who { font-weight: 500; color: #222; margin-bottom: 12px; }
+        .hero .hero-user .who::after { content: ''; display: inline-block; width: 1px; height: 13px;
+                                      background: #A9ABB3; margin: 0 0 -2px 14px; }
+        .hero .hero-user .btn { font-size: 14px; padding: 0; border: none; background: none;
+                                color: var(--gray-color); cursor: pointer; }
+        .hero .hero-user .btn:hover { color: var(--blue-color); }
+
+        /* ---------- 统计卡 ---------- */
+        /* 灰底行块，与 .activity-item 同源；左侧数字 + 右侧色条 */
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .stat-card { background: #f7f7f7; border-radius: 8px; padding: 20px 24px;
+                     display: flex; align-items: center; justify-content: space-between;
+                     min-width: 0; border: 1px solid transparent; transition: background .15s, border-color .15s; }
+        .stat-card.clickable { cursor: pointer; }
+        .stat-card.clickable:hover { background: #fff; border-color: var(--blue-color); }
+        .stat-card .v { font-size: 28px; font-weight: 600; line-height: 1; }
+        .stat-card .t { font-size: 14px; color: var(--gray-color); margin-top: 8px; }
+        .stat-card .bar { width: 4px; height: 40px; border-radius: 2px; flex-shrink: 0; }
+        .stat-1 .v { color: var(--blue-color); } .stat-1 .bar { background: var(--blue-color); }
+        .stat-2 .v { color: var(--gray-color); } .stat-2 .bar { background: #C3C9D6; }
+        .stat-3 .v { color: var(--red-color); }  .stat-3 .bar { background: var(--red-color); }
+
+        /* ---------- 分区 ---------- */
+        .sec { margin-bottom: 20px; }
+        .sec-head { display: flex; justify-content: space-between; align-items: center;
+                    height: 56px; padding: 0 30px; background: #fff; border-radius: 8px; }
+        .sec-title { font-size: 18px; font-weight: 600; color: #000; }
+        .sec-more, .sec-note { font-size: 14px; color: var(--gray-color); }
+        .sec-more { cursor: pointer; }
+        .sec-more:hover { color: var(--blue-color); }
+
+        /* ---------- 活动卡 ---------- */
+        /* 改成与管理端 .activity-item 一致的横向行块：
+           左标题+描述，右状态与链接，不再用彩色封面 */
+        .act-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        /* 分页控件：与活动行块同属一块灰底容器，视觉上归为列表的一部分 */
+        .act-pager {
+            display: flex; align-items: center; justify-content: flex-end; gap: 14px;
+            margin-top: 10px; padding: 14px 24px; background: #f7f7f7; border-radius: 8px;
+        }
+        .act-pager .page-btn {
+            font-size: 14px; padding: 6px 18px; border-radius: 4px;
+            border: 1px solid var(--blue-color); background: #fff;
+            color: var(--blue-color); cursor: pointer; transition: all .2s;
+        }
+        .act-pager .page-btn:hover:not(:disabled) { background: var(--blue-color); color: #fff; }
+        .act-pager .page-btn:disabled { border-color: #ccc; color: #bbb; cursor: not-allowed; }
+        .act-pager .page-info { font-size: 14px; color: var(--gray-color); }
+        .act-card { background: #f7f7f7; border-radius: 8px; padding: 16px 24px;
+                    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+                    border: 1px solid transparent; transition: background .15s, border-color .15s; }
+        .act-card:hover { background: #fff; border-color: var(--blue-color); }
+        .act-info { flex: 1 1 auto; min-width: 0; }
+        .act-info h4 { font-size: 15px; font-weight: 600; color: #000; margin-bottom: 4px; }
+        .act-info .desc { font-size: 14px; color: var(--gray-color); margin: 0; }
+        .act-right { display: flex; align-items: center; gap: 24px; flex-shrink: 0; }
+        /* 状态：沿用管理端「进行中=红、已结束=灰」的用色习惯 */
+        .act-status { font-size: 15px; font-weight: 400; white-space: nowrap; width: 48px; text-align: right; }
+        .act-card.is-running .act-status { color: var(--red-color); }
+        .act-card:not(.is-running) .act-status { color: #999; }
+        .act-card .btn { font-size: 14px; padding: 6px 18px; border-radius: 4px; white-space: nowrap; }
+
+        /* ---------- 中奖记录 ----------
+           中奖记录不再单独成块，改为点「我的中奖」统计卡后
+           在活动列表区渲染，复用 .act-card 的横向行块，
+           所以这里只需要奖项徽标样式。
+           徽标原先是中奖区块专用（限定在 .win-row 下），
+           该区块已删除，现在 .act-card 里也要用，故放开为公共类。 */
+        .tier { display: inline-block; padding: 3px 11px; border-radius: 4px; font-size: 13px; }
+        .tier-first  { background: #fdecea; color: var(--red-color); }
+        .tier-second { background: #fff4e6; color: #fd7e14; }
+        .tier-third  { background: #e6f4ea; color: #1e8e3e; }
+        .tier-other  { background: #eee; color: var(--gray-color); }
+
+        /* ---------- 领奖状态（奖品发放）----------
+           与奖项徽标 .tier 分开：奖项说的是「中了什么」，状态说的是「领到哪一步」。
+           四态各取一个可区分的浅底深字色，与 .tier 同尺寸，不加动画。 */
+        .claim-badge { display: inline-block; padding: 3px 11px; border-radius: 4px; font-size: 13px; white-space: nowrap; }
+        .claim-NOT_CLAIMED { background: #fdecea; color: var(--red-color); }   /* 未领取：待用户动作 */
+        .claim-CLAIMED     { background: #fff4e6; color: #fd7e14; }            /* 已申请待发货 */
+        .claim-SHIPPED     { background: #e8f0fe; color: var(--blue-color); }  /* 已发货：待确认收货 */
+        .claim-COMPLETED   { background: #e6f4ea; color: #1e8e3e; }            /* 已签收：闭环完成 */
+        /* 一行里现在有「奖项 + 状态 + 物流 + 按钮」多个元素，允许换行，避免窄屏挤压 */
+        .act-right { flex-wrap: wrap; justify-content: flex-end; }
+        .act-right .ship-info { font-size: 13px; color: var(--gray-color); line-height: 1.5; white-space: nowrap; }
+        /* 未填收货地址时的页内常驻提示（含跳转个人中心的链接），
+           alert 关掉后用户仍能找到入口 */
+        .act-right .claim-tip { flex-basis: 100%; text-align: right; font-size: 12px; color: var(--red-color); }
+        .act-right .claim-tip a { color: var(--blue-color); }
+
+        /* ---------- 功能入口（个人中心 / 智能客服）---------- */
+        /* 同样是横向行块，但用左侧 4px 主色竖条代替图标色块，
+           不再引入渐变装饰，保持与管理端一致的克制 */
+        .quick-entry { display: flex; flex-direction: column; gap: 10px; }
+        .qe-card { display: flex; align-items: center; gap: 16px; background: #f7f7f7;
+                   border-radius: 8px; padding: 18px 24px; cursor: pointer;
+                   border-left: 4px solid var(--blue-color);
+                   transition: background .15s; }
+        .qe-card:hover { background: #fff; }
+        .qe-chat { border-left-color: #764ba2; }
+        .qe-winners { border-left-color: #b8860b; }
+        .qe-body { flex: 1 1 auto; min-width: 0; }
+        .qe-t { font-size: 15px; font-weight: 600; color: #000; }
+        .qe-d { font-size: 14px; color: var(--gray-color); margin-top: 4px; }
+        .qe-arrow { color: #999; font-size: 15px; flex-shrink: 0; }
+        .qe-card:hover .qe-arrow { color: var(--blue-color); }
+
+        /* ---------- 通用 ---------- */
+        .empty { text-align: center; padding: 40px 20px; color: #999; font-size: 14px; }
+        .load-tip { text-align: center; padding: 36px; color: #999; font-size: 14px; }
+
+        /* ---------- 活动详情弹窗 ---------- */
+        .modal-content { border-radius: 8px; border: none; }
+        .modal-header { padding: 20px 30px; border-bottom-color: #eee; }
+        .modal-title { font-size: 18px; font-weight: 600; }
+        .modal-body { padding: 24px 30px; }
+        .modal-footer { padding: 16px 30px; border-top-color: #eee; }
+
+        /* ---------- 小东助手 ---------- */
+        /* ---------- 小东助手（页内快捷入口，完整对话仍走 chat.html） ---------- */
         #xiaoDongFab { position: fixed; bottom: 30px; right: 30px; z-index: 9999; }
-        #xiaoDongFab .fab-btn { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 16px rgba(102,126,234,0.4); transition: transform 0.2s; }
-        #xiaoDongFab .fab-btn:hover { transform: scale(1.1); }
-        #xiaoDongChat { position: fixed; bottom: 96px; right: 30px; z-index: 9998; width: 380px; height: 500px; background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); display: none; flex-direction: column; overflow: hidden; }
-        #xiaoDongChat .chat-header { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; padding: 12px 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        #xiaoDongFab .fab-btn { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px 0 14px;
+                                background: var(--blue-color); color: #fff; border: none; cursor: pointer;
+                                border-radius: 4px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+        #xiaoDongFab .fab-btn:hover { background: var(--hover-blue); }
+        #xiaoDongFab .fab-icon { font-size: 16px; }
+
+        /* 面板：高度与 bottom 联动，把「底边到视口底的距离」写进同一条 calc，
+           任何视口高度下底部输入框都不会被挤出屏幕。
+           显示/隐藏靠 .open 类切换，而不是把 display 写死在这里——
+           否则 jQuery 的 .toggle() 会写入 inline display:block，flex-direction 随之失效。 */
+        #xiaoDongChat { position: fixed; bottom: 82px; right: 30px; z-index: 9998; width: 360px;
+                        max-width: calc(100vw - 60px);
+                        height: min(520px, calc(100vh - 82px - 30px));
+                        background: #fff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.14);
+                        display: none; flex-direction: column; overflow: hidden; }
+        #xiaoDongChat.open { display: flex; }
+        #xiaoDongChat .chat-header { background: var(--blue-color); color: #fff; padding: 0 16px; height: 46px;
+                                     font-weight: 500; display: flex; justify-content: space-between;
+                                     align-items: center; flex-shrink: 0; }
         #xiaoDongChat .chat-header .close-btn { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
-        #xiaoDongChat .chat-messages { flex: 1; overflow-y: auto; padding: 12px; background: #f8f9fa; }
-        #xiaoDongChat .chat-messages .msg { margin-bottom: 10px; max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
-        #xiaoDongChat .chat-messages .msg.user { background: #667eea; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
-        #xiaoDongChat .chat-messages .msg.bot { background: #fff; color: #333; margin-right: auto; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-        #xiaoDongChat .chat-messages .msg.bot .typing { display: inline-block; width: 6px; height: 6px; background: #999; border-radius: 50%; animation: blink 1.4s infinite; margin: 0 2px; }
+        #xiaoDongChat .chat-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 16px; background: #fafafa; }
+        #xiaoDongChat .chat-messages .msg { margin-bottom: 10px; max-width: 85%; padding: 8px 12px; border-radius: 4px;
+                                           font-size: 14px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+        #xiaoDongChat .chat-messages .msg.user { background: var(--blue-color); color: #fff; margin-left: auto; }
+        #xiaoDongChat .chat-messages .msg.bot { background: #f2f2f2; color: #333; margin-right: auto; }
+        #xiaoDongChat .chat-messages .msg.bot .typing { display: inline-block; width: 6px; height: 6px; background: #999;
+                                                     border-radius: 50%; animation: blink 1.4s infinite; margin: 0 2px; }
         #xiaoDongChat .chat-messages .msg.bot .typing:nth-child(2) { animation-delay: 0.2s; }
         #xiaoDongChat .chat-messages .msg.bot .typing:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
-        #xiaoDongChat .chat-input { display: flex; padding: 10px; border-top: 1px solid #eee; }
-        #xiaoDongChat .chat-input input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; }
-        #xiaoDongChat .chat-input button { margin-left: 8px; border: none; background: #667eea; color: #fff; border-radius: 50%; width: 38px; height: 38px; cursor: pointer; font-size: 16px; }
-    </style>
+        #xiaoDongChat .chat-input { display: flex; padding: 10px 16px; border-top: 1px solid #eee; flex-shrink: 0; }
+        #xiaoDongChat .chat-input input { flex: 1; border: 1px solid #ddd; border-radius: 4px; padding: 8px 12px;
+                                          font-size: 14px; outline: none; }
+        #xiaoDongChat .chat-input input:focus { border-color: var(--blue-color); }
+        #xiaoDongChat .chat-input button { margin-left: 8px; border: none; background: var(--blue-color); color: #fff;
+                                           border-radius: 4px; width: 36px; cursor: pointer; font-size: 15px; }
+        #xiaoDongChat .chat-input button:hover { background: var(--hover-blue); }
+
+        /* ---------- 响应式 ---------- */
+        @media (max-width: 900px) {
+            .hero { flex-direction: column; }
+            .hero .hero-user { text-align: left; margin: 18px 0 0; }
+            .act-card { flex-direction: column; align-items: flex-start; gap: 14px; }
+            .act-right { width: 100%; justify-content: space-between; }
+        }
+        @media (max-width: 620px) {
+            .container { padding: 16px; }
+            .stats { grid-template-columns: 1fr; }
+            #xiaoDongChat { right: 16px; left: 16px; width: auto; bottom: 76px; }
+            #xiaoDongFab { right: 16px; bottom: 20px; }
+        }    </style>
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h3>🎉 活动大厅</h3>
-        <div class="user-info">
-            <span>👤 <strong id="userName">---</strong></span>
-            <button class="btn btn-outline-danger btn-sm" onclick="logout()">退出登录</button>
+
+    <!-- ==================== 欢迎栏 ==================== -->
+    <!-- 弱化后的标题栏：白底、无渐变无光斑，右侧用户名沿用管理端 header-box 的排布方式。
+         这里刻意不放任何跳转按钮：活动列表就在本页，统计卡可筛选活动，
+         公开名单 / 客服 / 个人中心也都有各自的入口，再加一排按钮只会重复。 -->
+    <div class="hero">
+        <div class="hero-left">
+            <div class="hero-title">抽奖系统</div>
+            <div class="hero-sub">欢迎回来，这里是活动大厅</div>
+        </div>
+        <div class="hero-user">
+            <div class="who"><span id="userName">---</span></div>
+            <button type="button" class="btn" onclick="logout()">退出登录</button>
         </div>
     </div>
 
-    <ul class="nav nav-tabs tab-nav" id="mainTab" role="tablist">
-        <li class="nav-item">
-            <a class="nav-link active" data-toggle="tab" href="#activityPanel">📋 活动列表</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link" data-toggle="tab" href="#myWinPanel">🏆 我的中奖</a>
-        </li>
-    </ul>
-
-    <div class="tab-content">
-        <!-- 活动列表 -->
-        <div class="tab-pane fade show active" id="activityPanel">
-            <div id="activityList"></div>
-            <div id="activityLoading" style="text-align:center;padding:40px;color:#999;">加载中...</div>
+    <!-- ==================== 统计卡 ==================== -->
+    <div class="stats">
+        <div class="stat-card stat-1 clickable" onclick="filterActivity('running')">
+            <div>
+                <div class="v" id="statRunning">--</div>
+                <div class="t">进行中活动</div>
+            </div>
+            <span class="bar"></span>
         </div>
-        <!-- 我的中奖 -->
-        <div class="tab-pane fade" id="myWinPanel">
-            <div id="myWinList"></div>
-            <div id="myWinLoading" style="text-align:center;padding:40px;color:#999;display:none;">加载中...</div>
+        <div class="stat-card stat-2 clickable" onclick="filterActivity('ended')">
+            <div>
+                <div class="v" id="statEnded">--</div>
+                <div class="t">已结束活动</div>
+            </div>
+            <span class="bar"></span>
+        </div>
+        <div class="stat-card stat-3 clickable" onclick="filterActivity('mywins')">
+            <div>
+                <div class="v" id="statMyWins">--</div>
+                <div class="t">我的中奖</div>
+            </div>
+            <span class="bar"></span>
         </div>
     </div>
+
+    <!-- ==================== 活动 ==================== -->
+    <div class="sec" id="actSection">
+        <div class="sec-head">
+            <span class="sec-title" id="actTitle">抽奖活动</span>
+            <span class="sec-note" id="actFilterNote">共 0 个活动</span>
+        </div>
+        <div class="act-grid" id="activityList">
+            <div class="load-tip" style="grid-column:1/-1;">加载中...</div>
+        </div>
+        <div class="act-pager" id="actPager"></div>
+    </div>
+
+    <!-- ==================== 功能入口 ==================== -->
+    <!-- 与上方统计卡分开：上面三个是可计数的数字，这里三个是纯跳转入口 -->
+    <div class="quick-entry">
+        <!-- 公开中奖名单：原先挂在「我的中奖」区块标题右侧，
+             该区块已按需求删除，入口移到这里并按需求置顶 -->
+        <div class="qe-card qe-winners" onclick="location.href='public-winners.html'">
+            <div class="qe-body">
+                <div class="qe-t">公开中奖名单</div>
+                <div class="qe-d">按活动查看全部中奖情况</div>
+            </div>
+            <span class="qe-arrow">→</span>
+        </div>
+        <div class="qe-card qe-profile" onclick="location.href='user-profile.html'">
+            <div class="qe-body">
+                <div class="qe-t">个人中心</div>
+                <div class="qe-d" id="qeProfileDesc">查看账号信息</div>
+            </div>
+            <span class="qe-arrow">→</span>
+        </div>
+        <div class="qe-card qe-chat" onclick="location.href='chat.html'">
+            <div class="qe-body">
+                <div class="qe-t">智能客服</div>
+                <div class="qe-d">有小东帮你解答活动与奖品问题</div>
+            </div>
+            <span class="qe-arrow">→</span>
+        </div>
+    </div>
+
 </div>
 
 <!-- 小东助手 -->
 <div id="xiaoDongFab">
-    <button class="fab-btn" onclick="toggleXiaoDong()" title="小东助手">🤖</button>
+    <button class="fab-btn" onclick="toggleXiaoDong()" title="小东助手"><span class="fab-icon">🤖</span>小东助手</button>
 </div>
 <div id="xiaoDongChat">
     <div class="chat-header">
-        <span>🤖 小东助手</span>
-        <button class="close-btn" onclick="toggleXiaoDong()">✕</button>
+        <span>小东助手</span>
+        <span>
+            <a href="chat.html" style="color:#fff;font-size:13px;margin-right:12px;font-weight:400;">完整对话页 →</a>
+            <button class="close-btn" onclick="toggleXiaoDong()">✕</button>
+        </span>
     </div>
     <div class="chat-messages" id="chatMessages">
-        <div class="msg bot">你好！我是小东 🎉<br>你可以问我：<br>• 有哪些进行中的活动？<br>• 奖品有哪些？<br>• 查看用户列表<br>• 某活动的中奖记录</div>
+        <div class="msg bot">你好！我是小东，我可以帮你查活动、奖品和中奖记录。</div>
     </div>
     <div class="chat-input">
         <input type="text" id="chatInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendMessage()">
@@ -114,95 +319,394 @@
     </div>
 </div>
 
-<!-- 小东助手 -->
-<div id="xiaoDongFab">
-    <button class="fab-btn" onclick="toggleXiaoDong()" title="小东助手">🤖</button>
-</div>
-<div id="xiaoDongChat">
-    <div class="chat-header">
-        <span>🤖 小东助手</span>
-        <button class="close-btn" onclick="toggleXiaoDong()">✕</button>
-    </div>
-    <div class="chat-messages" id="chatMessages">
-        <div class="msg bot">你好！我是小东 🎉<br>你可以问我：<br>• 有哪些进行中的活动？<br>• 奖品有哪些？<br>• 查看用户列表<br>• 某活动的中奖记录</div>
-    </div>
-    <div class="chat-input">
-        <input type="text" id="chatInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button onclick="sendMessage()">➤</button>
-    </div>
-</div>
-
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"></script>
-<script src="./js/toastr.min.js?v=20260913"></script>
 <script>
+    // token 失效时跳「用户端」登录页
+    window.AUTH_GUARD_LOGIN_PAGE = 'user-login.html';
+
     var token = localStorage.getItem('token');
     if (!token) { location.assign('user-login.html'); }
 
-    if (window.toastr) { toastr.options = { positionClass: 'toast-top-center', timeOut: 3000 }; }
-
     function logout() { localStorage.clear(); location.assign('user-login.html'); }
 
-    // 加载用户信息
+    var activityFilter = 'all';
+
+    // ---------- 用户信息 ----------
     $.ajax({
         url: '/user/me',
         headers: { token: token },
         success: function(result) {
-            if (result.code === 200) { $('#userName').text(result.data.userName); }
-            else { logout(); }
+            if (window.AuthGuard && AuthGuard.handle(result, '获取用户信息')) return;
+            if (result.code === 200) {
+                $('#userName').text(result.data.userName);
+                // 功能入口卡片的副标题带上用户名，比原来干巴巴一个「查看」有信息量
+                $('#qeProfileDesc').text('查看 ' + (result.data.userName || '') + ' 的账号信息');
+            } else {
+                logout();
+            }
         },
-        error: function() { logout(); }
+        error: function(xhr) {
+            if (window.AuthGuard && AuthGuard.handle(xhr, '获取用户信息')) return;
+            logout();
+        }
     });
 
-    // 加载活动列表
+    // ---------- 活动列表 ----------
+    // 分页 + 筛选全部交给服务端：
+    // 早前版本固定 pageSize=100 一次性拉全量，活动超过 100 个时静默截断，
+    // 且顶部统计只对当前页计数，导致「进行中/已结束」数字失真。
+    // 变量须在首次 loadActivities() 调用前声明，否则 actPage 为 undefined。
+    var actPage = 1;
+    var actPageSize = 10;
+    var actTotal = 0;
+    var actTotalPages = 1;
+
     loadActivities();
+    loadMyWins();
 
     function loadActivities() {
+        // 「我的中奖」不是活动列表的一种 status 筛选，而是换一份数据源：
+        // 复用它自己已经拉到的中奖记录，没必要为一个视图再发一次活动请求。
+        if (activityFilter === 'mywins') {
+            loadMyWins(renderMyWins);
+            return;
+        }
+        // 标题在发请求前就还原：放在 renderActivities 里的话，
+        // 一旦请求失败（走 error 分支不渲染列表），标题会停在上一个视图
+        $('#actTitle').text('抽奖活动');
+        // 筛选切换后回到第 1 页，否则会停在一个已越界的页码上
+        if (actPage > actTotalPages) { actPage = actTotalPages; }
         $.ajax({
             url: '/activity/find-list',
             headers: { token: token },
-            data: { pageNum: 1, pageSize: 20 },
+            data: {
+                currentPage: actPage,
+                pageSize: actPageSize,
+                // all 时不传 status，让后端返回全部
+                status: activityFilter === 'all' ? null : (activityFilter === 'running' ? 'RUNNING' : 'COMPLETED')
+            },
             success: function(result) {
-                $('#activityLoading').hide();
-                if (result.code !== 200 || !result.data || !result.data.records) {
-                    $('#activityList').html('<div class="empty-state"><div class="icon">📭</div><p>暂无活动</p></div>');
+                if (window.AuthGuard && AuthGuard.handle(result, '查询活动列表')) return;
+                if (result.code !== 200 || !result.data) {
+                    $('#activityList').empty().append(emptyNode('暂无活动'));
                     return;
                 }
-                var html = '';
-                result.data.records.forEach(function(a) {
-                    var badge = a.valid ? '<span class="badge badge-success">进行中</span>' : '<span class="badge badge-secondary">已结束</span>';
-                    html += '<div class="activity-card">' +
-                        '<h5>' + escapeHtml(a.activityName) + ' ' + badge + '</h5>' +
-                        '<p class="desc">' + escapeHtml(a.description || '') + '</p>' +
-                        '<button class="btn btn-outline-primary btn-sm-action" onclick="showDetail(' + a.activityId + ')">查看详情</button>' +
-                        '</div>';
-                });
-                $('#activityList').html(html);
+
+                actTotal = result.data.total || 0;
+                actTotalPages = Math.max(1, Math.ceil(actTotal / actPageSize));
+
+                // 统计数字用后端的全量计数，不再对当前页记录自行统计
+                $('#statRunning').text(result.data.runningCount || 0);
+                $('#statEnded').text(result.data.completedCount || 0);
+
+                renderActivities(result.data.records || []);
             },
-            error: function() { $('#activityLoading').text('加载失败，请刷新重试'); }
+            error: function(xhr) {
+                if (window.AuthGuard && AuthGuard.handle(xhr, '查询活动列表')) return;
+                $('#activityList').empty().append(emptyNode('活动加载失败，请刷新重试'));
+            }
         });
     }
 
+    function filterActivity(kind) {
+        activityFilter = (activityFilter === kind) ? 'all' : kind;
+        actPage = 1;
+        loadActivities();
+    }
+
+    function goActPage(page) {
+        if (page < 1 || page > actTotalPages || page === actPage) { return; }
+        actPage = page;
+        loadActivities();
+        // 翻页后回到列表顶部，否则用户停在原滚动位置看不出内容变了
+        var top = $('#actSection').offset().top - 20;
+        window.scrollTo({ top: top < 0 ? 0 : top, behavior: 'smooth' });
+    }
+
+    // 「我的中奖」列表：与活动列表共用 #activityList 容器，
+    // 这样点统计卡就是在同一个区域换内容，和「进行中/已结束」的切换方式一致。
+    function renderMyWins(records, failed) {
+        $('#actTitle').text('我的中奖');
+        // 中奖记录一次性返回，不分页；清掉活动列表留下的分页器
+        $('#actPager').empty();
+
+        var $box = $('#activityList').empty();
+        if (failed) {
+            $('#actFilterNote').text('');
+            $box.append(emptyNode('中奖记录加载失败，请刷新重试'));
+            return;
+        }
+        $('#actFilterNote').text('共 ' + records.length + ' 条中奖记录');
+        if (records.length === 0) {
+            $box.append(emptyNode('你还没有中奖记录，多参与活动试试手气'));
+            return;
+        }
+        records.forEach(function(r) {
+            // 复用 .act-card：与活动列表同一个行块骨架，
+            // 切换筛选时观感不跳。中奖记录没有「进行中/已结束」语义，
+            // 因此不加 is-running，右侧用奖项徽标代替状态文字。
+            // 领奖状态/物流/操作按钮接在奖项徽标之后：奖项与状态是两个维度，都保留。
+            $box.append($('<div class="act-card">')
+                .append($('<div class="act-info">')
+                    .append($('<h4>').text(r.prizeName || '奖品'))
+                    .append($('<p class="desc">').text(formatDateTime(r.winningTime))))
+                .append($('<div class="act-right">')
+                    .append($('<span class="tier ' + tierClass(r.prizeTier) + '">')
+                        .text(r.prizeTier || '中奖'))
+                    .append(buildClaimNodes(r))));
+        });
+    }
+
+    // ---------- 领奖履约（未领取 → 已申请待发货 → 已发货 → 已签收）----------
+    /*
+     * 状态文案优先用后端返回的 claimStatusText，缺失时用本地映射兜底
+     * （后端枚举 WinningClaimStatusEnum 的 message 与此处文案一致）。
+     * 领奖/确认收货两个动作只改状态，成功后重拉列表，由后端数据决定渲染结果，
+     * 前端不自己改 DOM 状态 —— 避免与服务端不一致。
+     */
+    var CLAIM_STATUS_TEXT = {
+        'NOT_CLAIMED': '未领取',
+        'CLAIMED': '已申请待发货',
+        'SHIPPED': '已发货',
+        'COMPLETED': '已签收'
+    };
+
+    function claimStatusText(r) {
+        return r.claimStatusText || CLAIM_STATUS_TEXT[r.claimStatus] || CLAIM_STATUS_TEXT.NOT_CLAIMED;
+    }
+
+    /** 状态类名只允许枚举内的四个值，不用后端字符串直接拼 class */
+    function claimStatusClass(r) {
+        return CLAIM_STATUS_TEXT[r.claimStatus] ? r.claimStatus : 'NOT_CLAIMED';
+    }
+
+    /**
+     * 组装一行右侧的「状态 + 物流 + 按钮」。
+     * 返回数组，交给 jQuery .append() 展开，保持调用处是一次 append。
+     */
+    function buildClaimNodes(r) {
+        var status = claimStatusClass(r);
+        var $nodes = [$('<span class="claim-badge claim-' + status + '">').text(claimStatusText(r))];
+
+        if (status === 'SHIPPED') {
+            // 已发货：把承运公司与单号直接摊在行内，用户不用再点开任何东西
+            $nodes.push($('<div class="ship-info">')
+                .append($('<div>').text('承运：' + (r.shippingCompany || '—')))
+                .append($('<div>').text('单号：' + (r.shippingNo || '—'))));
+        }
+        if (status === 'NOT_CLAIMED') {
+            $nodes.push($('<button type="button" class="btn btn-outline-primary">').text('我要领奖')
+                .on('click', function() { claimPrize(r.recordId, $(this)); }));
+        } else if (status === 'SHIPPED') {
+            $nodes.push($('<button type="button" class="btn btn-outline-primary">').text('确认收货')
+                .on('click', function() { confirmReceive(r.recordId, $(this)); }));
+        }
+        // 已申请待发货 / 已签收：状态徽标已说明一切，不再给按钮
+        return $nodes;
+    }
+
+    /**
+     * 「我要领奖」：先查默认收货地址，填全了才提交申请。
+     * 这里先拦一次是为了让用户看到「去哪儿补」，而不是提交后才被后端 600 拒绝。
+     */
+    function claimPrize(recordId, $btn) {
+        $btn.prop('disabled', true);
+        $.ajax({
+            url: '/user/receiver-info',
+            headers: { token: token },
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询收货地址')) return;
+                if (result.code !== 200) {
+                    $btn.prop('disabled', false);
+                    alert(result.message || '收货地址查询失败');
+                    return;
+                }
+                var info = result.data || {};
+                if (!info.complete) {
+                    $btn.prop('disabled', false);
+                    promptAddress($btn, '请先在个人中心补全收货地址');
+                    return;
+                }
+                submitClaim(recordId, $btn);
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false);
+                if (window.AuthGuard && AuthGuard.handle(xhr, '查询收货地址')) return;
+                alert(ajaxMessage(xhr, '收货地址查询失败'));
+            }
+        });
+    }
+
+    /** 提交领奖申请（收货信息用个人中心已保存的默认地址，不再重复传） */
+    function submitClaim(recordId, $btn) {
+        $btn.prop('disabled', true).text('提交中…');
+        $.ajax({
+            url: '/api/winning/claim',
+            type: 'POST',
+            headers: { token: token },
+            contentType: 'application/json',
+            dataType: 'json',
+            data: JSON.stringify({ recordId: recordId }),
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '申请领奖')) return;
+                if (result.code !== 200) {
+                    $btn.prop('disabled', false).text('我要领奖');
+                    // 600 = 收货信息不完整：给出可点击的补全入口，而不是一句干巴巴的报错
+                    if (result.code === 600) {
+                        promptAddress($btn, result.message || '请先在个人中心补全收货地址');
+                        return;
+                    }
+                    alert(result.message || '申请领奖失败');
+                    return;
+                }
+                alert('领奖申请已提交，请等待管理员发货');
+                refreshMyWins();
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).text('我要领奖');
+                if (window.AuthGuard && AuthGuard.handle(xhr, '申请领奖')) return;
+                alert(ajaxMessage(xhr, '申请领奖失败'));
+            }
+        });
+    }
+
+    /** 「确认收货」：只在 SHIPPED 时出现，不可撤销，先让用户确认一次 */
+    function confirmReceive(recordId, $btn) {
+        if (!confirm('确认已收到该奖品？确认后状态将变为「已签收」，不可撤销。')) { return; }
+        $btn.prop('disabled', true).text('提交中…');
+        $.ajax({
+            url: '/api/winning/confirm',
+            type: 'POST',
+            headers: { token: token },
+            contentType: 'application/json',
+            dataType: 'json',
+            data: JSON.stringify({ recordId: recordId }),
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '确认收货')) return;
+                if (result.code !== 200) {
+                    $btn.prop('disabled', false).text('确认收货');
+                    alert(result.message || '确认收货失败');
+                    return;
+                }
+                alert('确认收货成功');
+                refreshMyWins();
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).text('确认收货');
+                if (window.AuthGuard && AuthGuard.handle(xhr, '确认收货')) return;
+                alert(ajaxMessage(xhr, '确认收货失败'));
+            }
+        });
+    }
+
+    /**
+     * 地址不完整提示：页内留一条带链接的常驻提示（alert 关掉后仍能找到入口），
+     * 同时问一句是否现在就去补全 —— 本页没有弹窗组件，用 confirm 做跳转确认最省事。
+     */
+    function promptAddress($btn, msg) {
+        var text = msg || '请先在个人中心补全收货地址';
+        var $box = $btn.closest('.act-right');
+        $box.find('.claim-tip').remove();   // 重复点击只保留一条，避免堆叠
+        $box.append($('<div class="claim-tip">')
+            .text(text + ' ')
+            .append($('<a href="user-profile.html">去个人中心补全 →</a>')));
+        if (confirm(text + '\n是否现在前往个人中心补全？')) {
+            location.href = 'user-profile.html';
+        }
+    }
+
+    /** 领奖/确认收货成功后重拉数据；不在「我的中奖」视图时只更新统计卡数字 */
+    function refreshMyWins() {
+        if (activityFilter === 'mywins') { loadMyWins(renderMyWins); }
+        else { loadMyWins(); }
+    }
+
+    /** 传输层错误里能拿到后端 message 就用它，拿不到才用兜底文案 */
+    function ajaxMessage(xhr, fallback) {
+        try {
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) { return xhr.responseJSON.message; }
+        } catch (e) { /* 忽略，用兜底文案 */ }
+        return fallback;
+    }
+
+    function renderActivities(list) {
+        var note = {
+            'all': '共 ' + actTotal + ' 个活动',
+            'running': '仅看进行中 · 共 ' + actTotal + ' 个',
+            'ended': '仅看已结束 · 共 ' + actTotal + ' 个'
+        };
+        $('#actFilterNote').text(note[activityFilter]);
+
+        var $box = $('#activityList').empty();
+        if (list.length === 0) {
+            $box.append(emptyNode(activityFilter === 'all' ? '暂无活动' : '没有符合条件的活动'));
+            renderPager();
+            return;
+        }
+
+        list.forEach(function(a) {
+            // 用户端不提供「参与抽奖」入口：抽奖动作本身由管理端执行，
+            // 这里只做「看详情」和「看名单」两种只读操作
+            var actionText = a.valid ? '查看详情' : '查看名单';
+            var statusText = a.valid ? '进行中' : '已结束';
+
+            function go() {
+                if (a.valid) { showDetail(a.activityId); }
+                else { location.href = 'public-winners.html?activityId=' + encodeURIComponent(a.activityId); }
+            }
+
+            // 与管理端 .activity-item 一致的横向行块：左标题+描述，右状态+操作
+            var $card = $('<div class="act-card">')
+                .addClass(a.valid ? 'is-running' : 'is-ended')
+                .on('click', go)
+                .append($('<div class="act-info">')
+                    .append($('<h4>').text(a.activityName || '未命名活动'))
+                    .append($('<p class="desc">').text(a.description || '暂无描述')))
+                .append($('<div class="act-right">')
+                    .append($('<span class="act-status">').text(statusText))
+                    .append($('<button class="btn btn-outline-primary">').text(actionText)
+                        .on('click', function(e) { e.stopPropagation(); go(); })));
+            $box.append($card);
+        });
+
+        renderPager();
+    }
+
+    // 分页控件：只在有翻页必要时出现，单页时不占用视觉空间
+    function renderPager() {
+        var $pager = $('#actPager').empty();
+        if (actTotalPages <= 1) { return; }
+        $pager.append(
+            $('<button type="button" class="page-btn">').text('上一页')
+                .prop('disabled', actPage <= 1)
+                .on('click', function() { goActPage(actPage - 1); }))
+            .append($('<span class="page-info">').text(actPage + ' / ' + actTotalPages))
+            .append($('<button type="button" class="page-btn">').text('下一页')
+                .prop('disabled', actPage >= actTotalPages)
+                .on('click', function() { goActPage(actPage + 1); }));
+    }
+
+    // ---------- 活动详情 ----------
     function showDetail(activityId) {
         $.ajax({
             url: '/activity/detail/find',
             headers: { token: token },
             data: { activityId: activityId },
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询活动详情')) return;
                 if (result.code !== 200) { alert('加载详情失败'); return; }
                 var d = result.data;
                 $('#modalTitle').text(d.activityName);
                 var prizesHtml = '<h6>奖品列表</h6>';
                 if (d.prizes && d.prizes.length > 0) {
                     d.prizes.forEach(function(p) {
-                        var cls = '';
-                        if (p.tiers && p.tiers.indexOf('一等奖') >= 0) cls = 'first';
-                        else if (p.tiers && p.tiers.indexOf('二等奖') >= 0) cls = 'second';
-                        else if (p.tiers && p.tiers.indexOf('三等奖') >= 0) cls = 'third';
-                        var validBadge = p.valid ? '<span class="badge badge-success">可抽</span>' : '<span class="badge badge-secondary">已抽完</span>';
-                        prizesHtml += '<div class="prize-item ' + cls + '">' +
+                        var validBadge = p.valid
+                            ? '<span class="badge badge-success">可抽</span>'
+                            : '<span class="badge badge-secondary">已抽完</span>';
+                        prizesHtml += '<div class="border-left border-primary pl-3 mb-2">' +
                             '<strong>' + escapeHtml(p.name) + '</strong> ' + validBadge +
-                            ' <span class="tier-badge badge badge-light">' + escapeHtml(p.tiers || '') + '</span>' +
+                            ' <span class="badge badge-light">' + escapeHtml(p.tiers || '') + '</span>' +
                             '<br><small>数量: ' + p.prizeAmount + ' | 价值: ¥' + (p.price || 0) + '</small>' +
                             (p.description ? '<br><small>' + escapeHtml(p.description) + '</small>' : '') +
                             '</div>';
@@ -212,46 +716,58 @@
                 if (d.users && d.users.length > 0) {
                     prizesHtml += '<p class="text-muted small">' + d.users.map(function(u) { return escapeHtml(u.name); }).join('、') + '</p>';
                 }
-                prizesHtml += '<hr><p class="small text-muted">状态: ' + (d.status || '') + '</p>';
+                prizesHtml += '<hr><p class="small text-muted">状态: ' + (d.status ? '进行中' : '已结束') + '</p>';
                 $('#modalBody').html(prizesHtml);
                 $('#activityDetailModal').modal('show');
             },
-            error: function() { alert('请求失败'); }
+            error: function(xhr) {
+                if (window.AuthGuard && AuthGuard.handle(xhr, '查询活动详情')) return;
+                alert('请求失败');
+            }
         });
     }
 
-    // "我的中奖" Tab 切换时加载
-    var myWinLoaded = false;
-    $('a[href="#myWinPanel"]').on('shown.bs.tab', function() {
-        if (!myWinLoaded) loadMyWins();
-    });
-
-    function loadMyWins() {
-        myWinLoaded = true;
-        $('#myWinLoading').show();
+    // ---------- 我的中奖 ----------
+    // onDone 可选：
+    //   页面加载时只调 loadMyWins()，作用仅是刷新统计卡上的数字；
+    //   点了「我的中奖」卡时才传 renderMyWins，把记录渲染到活动列表区。
+    // 记录不缓存，每次点都重新拉，避免中奖后数字和列表不一致。
+    function loadMyWins(onDone) {
         $.ajax({
             url: '/draw/my-records',
             headers: { token: token },
             success: function(result) {
-                $('#myWinLoading').hide();
-                if (result.code !== 200 || !result.data || result.data.length === 0) {
-                    $('#myWinList').html('<div class="empty-state"><div class="icon">🏆</div><p>你还没有中奖记录</p><p class="text-muted">多参与活动，好运等着你！</p></div>');
-                    return;
-                }
-                var html = '<table class="table table-striped record-table"><thead><tr><th>奖品</th><th>奖项</th><th>活动</th><th>中奖时间</th></tr></thead><tbody>';
-                result.data.forEach(function(r) {
-                    html += '<tr>' +
-                        '<td>' + escapeHtml(r.prizeName) + '</td>' +
-                        '<td>' + escapeHtml(r.prizeTier || '') + '</td>' +
-                        '<td class="text-muted small">' + escapeHtml(r.winnerName || '') + '</td>' +
-                        '<td class="text-muted small">' + (r.winningTime || '') + '</td>' +
-                        '</tr>';
-                });
-                html += '</tbody></table>';
-                $('#myWinList').html(html);
+                if (window.AuthGuard && AuthGuard.handle(result, '查询中奖记录')) return;
+                var records = (result.code === 200 && result.data) ? result.data : [];
+
+                // 统计卡数字
+                $('#statMyWins').text(records.length);
+
+                if (onDone) { onDone(records, false); }
             },
-            error: function() { $('#myWinLoading').text('加载失败'); }
+            error: function(xhr) {
+                if (window.AuthGuard && AuthGuard.handle(xhr, '查询中奖记录')) return;
+                // 第二个参数标记失败：不能把加载失败渲染成「你还没有中奖记录」，
+                // 那会让用户以为自己没中过奖
+                if (onDone) { onDone([], true); }
+            }
         });
+    }
+
+    function tierClass(tier) {
+        if (tier && tier.indexOf('一等奖') >= 0) return 'tier-first';
+        if (tier && tier.indexOf('二等奖') >= 0) return 'tier-second';
+        if (tier && tier.indexOf('三等奖') >= 0) return 'tier-third';
+        return 'tier-other';
+    }
+
+    // ---------- 工具 ----------
+    function emptyNode(text) {
+        var $d = $('<div class="empty">').text(text);
+        // 列表容器是 grid（.act-grid），空态要横跨整行，
+        // 否则会被挤在左半边
+        $d.attr('style', 'grid-column:1/-1');
+        return $d;
     }
 
     function escapeHtml(str) {
@@ -259,50 +775,54 @@
         var div = document.createElement('div'); div.textContent = str; return div.innerHTML;
     }
 
-    // ==================== 小东助手 ====================
-    function toggleXiaoDong() {
-        var chat = $('#xiaoDongChat');
-        chat.toggle();
+    function formatDateTime(value) {
+        if (!value) return '';
+        var d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        function p(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+            p(d.getHours()) + ':' + p(d.getMinutes());
     }
+
+    // ==================== 小东助手 ====================
+    /* 用 class 切换，避开 jQuery .toggle() 与 `display:none` 打架导致 flex 失效的问题 */
+    function toggleXiaoDong() { $('#xiaoDongChat').toggleClass('open'); }
 
     function sendMessage() {
         var input = $('#chatInput');
         var msg = input.val().trim();
         if (!msg) return;
 
-        // 显示用户消息
         var messages = $('#chatMessages');
-        messages.append('<div class="msg user">' + escapeHtml(msg) + '</div>');
+        messages.append($('<div class="msg user">').text(msg));
 
-        // 显示加载提示
         var loadingId = 'loading-' + Date.now();
-        messages.append('<div class="msg bot" id="' + loadingId + '"><span class="typing"></span><span class="typing"></span><span class="typing"></span></div>');
+        messages.append($('<div class="msg bot">').attr('id', loadingId).html(
+            '<span class="typing"></span><span class="typing"></span><span class="typing"></span>'));
         messages.scrollTop(messages[0].scrollHeight);
         input.val('');
 
-        // SSE 流式请求
-        var botMsgDiv = null;
-        var fullText = '';
+        var sessionId = localStorage.getItem('ai_session_id');
+        if (!sessionId) {
+            sessionId = 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+            localStorage.setItem('ai_session_id', sessionId);
+        }
 
-        fetch('/api/chat', {
+        fetch('/api/ai/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'token': token },
-            body: JSON.stringify({ message: msg })
+            body: JSON.stringify({ message: msg, sessionId: sessionId })
         }).then(function(response) {
-            // 移除加载动画
             $('#' + loadingId).remove();
-
             var reader = response.body.getReader();
             var decoder = new TextDecoder();
+            var botMsgDiv = null;
+            var fullText = '';
 
             function read() {
                 reader.read().then(function(result) {
-                    if (result.done) {
-                        // [DONE] 不显示
-                        return;
-                    }
+                    if (result.done) { return; }
                     var text = decoder.decode(result.value, { stream: true });
-                    // 解析 SSE 格式: "data: xxx\n\n"
                     var lines = text.split('\n');
                     for (var i = 0; i < lines.length; i++) {
                         var line = lines[i];
@@ -322,9 +842,9 @@
                 });
             }
             read();
-        }).catch(function(err) {
+        }).catch(function() {
             $('#' + loadingId).remove();
-            messages.append('<div class="msg bot">小东：网络好像不太好，请重试～</div>');
+            messages.append($('<div class="msg bot">').text('小东：网络好像不太好，请重试～'));
             messages.scrollTop(messages[0].scrollHeight);
         });
     }

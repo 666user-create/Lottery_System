@@ -92,7 +92,6 @@ EmailNotifyQueue ─→ EmailNotifyListener ─┘（concurrency=5 / prefetch=5�
 |---|---|
 | `docs/test/08-接口契约.md` | 短信/邮件通知通道描述：短信宝/直接 SMTP → "两级通知队列（短信 Mock / 邮件真实）" |
 | `docs/test/05-安全测试报告.md` | smsbao api-key 明文条目：标记为"已随本次改造移除" |
-| `docs/test/07-缺陷与总结报告.md` | BUG-004 明文密钥清单中 smsbao 条目状态更新（其余密钥不在本次范围） |
 | `docs/test/01-测试计划与方案.md` | 真实外发链路描述中短信宝字样更新 |
 
 配置开关：不新增（Mock 是短信唯一驱动，YAGNI；将来接真实驱动时再引入 `sms.provider` 选择开关）。

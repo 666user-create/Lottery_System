@@ -16,10 +16,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,6 +55,18 @@ public class PrizeController {
         logger.info("查询奖品:{}", JacksonUtil.writeValueAsString(param));
         PageListDTO<PrizeDTO> pageListDTO = prizeService.findPrizeList(param);
         return CommonResult.success(convertToFindPrizeListResult(pageListDTO));
+    }
+
+    /*
+     * 删除奖品。
+     * 用 DELETE 而不是 POST，与 /activity/delete 保持一致的动词语义。
+     * 奖品仍被活动引用时服务端返回 302，不会静默删掉活动侧数据。
+     * */
+    @DeleteMapping("/delete")
+    public CommonResult<Boolean> deletePrize(@RequestParam("prizeId") Long prizeId) {
+        logger.info("删除奖品 prizeId:{}", prizeId);
+        prizeService.deletePrize(prizeId);
+        return CommonResult.success(true);
     }
 
     private FindPrizeListResult convertToFindPrizeListResult(PageListDTO<PrizeDTO> pageListDTO) {

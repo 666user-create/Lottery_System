@@ -1,17 +1,17 @@
 package org.example.lottery_system.service.impl;
 
 import org.example.lottery_system.common.errorcode.ServiceErrorCodeConstants;
-import org.example.lottery_system.common.exception.ServiceException;
 import org.example.lottery_system.common.utils.JacksonUtil;
 import org.example.lottery_system.common.utils.RedisUtil;
 import org.example.lottery_system.controller.param.DrawPrizeParam;
 import org.example.lottery_system.controller.param.ShowWinningRecordsParam;
-import org.example.lottery_system.controller.result.WinningRecordsResult;
 import org.example.lottery_system.dao.dataobject.*;
 import org.example.lottery_system.dao.mapper.*;
 import org.example.lottery_system.service.DrawPrizeService;
 import org.example.lottery_system.service.dto.WinningRecordDTO;
+import org.example.lottery_system.service.enums.ActivityPrizeStatusEnum;
 import org.example.lottery_system.service.enums.ActivityPrizeTiersEnum;
+import org.example.lottery_system.service.enums.WinningClaimStatusEnum;
 import org.example.lottery_system.service.enums.ActivityStatusEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +76,7 @@ public class DrawPrizeServiceImpl implements DrawPrizeService {
             return false;
         }
         //奖品是否有效
-        if (activityPrizeDO.getStatus().equalsIgnoreCase(ActivityStatusEnum.COMPLETED.name())) {
+        if (activityPrizeDO.getStatus().equalsIgnoreCase(ActivityPrizeStatusEnum.COMPLETED.name())) {
             //throw new ServiceException(ServiceErrorCodeConstants.ACTIVITY_PRIZE_COMPLETED);
             logger.info("奖品已结束:{}", JacksonUtil.writeValueAsString(param));
             return false;
@@ -187,6 +187,18 @@ public class DrawPrizeServiceImpl implements DrawPrizeService {
         return convertToWinningRecordDTO(winningRecordDOList);
     }
 
+    @Override
+    public List<WinningRecordDTO> getMyRecords(Long winnerId) {
+        if (winnerId == null) {
+            return Arrays.asList();
+        }
+        List<WinningRecordDO> winningRecordDOList = winningRecordMapper.selectByWinnerId(winnerId);
+        if (CollectionUtils.isEmpty(winningRecordDOList)) {
+            return Arrays.asList();
+        }
+        return convertToWinningRecordDTO(winningRecordDOList);
+    }
+
     private List<WinningRecordDTO> convertToWinningRecordDTO(List<WinningRecordDO> winningRecordDOList) {
         if (CollectionUtils.isEmpty(winningRecordDOList)) {
             return Arrays.asList();
@@ -194,11 +206,18 @@ public class DrawPrizeServiceImpl implements DrawPrizeService {
         return winningRecordDOList.stream()
                 .map(winningRecordDO -> {
                     WinningRecordDTO winningRecordDTO = new WinningRecordDTO();
+                    winningRecordDTO.setRecordId(winningRecordDO.getId());
+                    winningRecordDTO.setActivityName(winningRecordDO.getActivityName());
                     winningRecordDTO.setWinnerId(winningRecordDO.getWinnerId());
                     winningRecordDTO.setWinnerName(winningRecordDO.getWinnerName());
                     winningRecordDTO.setPrizeName(winningRecordDO.getPrizeName());
                     winningRecordDTO.setPrizeTier(ActivityPrizeTiersEnum.forName(winningRecordDO.getPrizeTier()));
                     winningRecordDTO.setWinningTime(winningRecordDO.getWinningTime());
+                    // 领奖履约:状态与物流信息(前端据此显示徽标和"我要领奖/确认收货"按钮)
+                    winningRecordDTO.setClaimStatus(WinningClaimStatusEnum.normalize(winningRecordDO.getClaimStatus()));
+                    winningRecordDTO.setClaimStatusText(WinningClaimStatusEnum.messageOf(winningRecordDO.getClaimStatus()));
+                    winningRecordDTO.setShippingCompany(winningRecordDO.getShippingCompany());
+                    winningRecordDTO.setShippingNo(winningRecordDO.getShippingNo());
                     return winningRecordDTO;
                 })
                 .collect(Collectors.toList());

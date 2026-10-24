@@ -3,8 +3,8 @@
 
 来源对照（不凭记忆，均可在代码中核对）：
   错误码      → common/errorcode/ServiceErrorCodeConstants.java、GlobalErrorCodeConstants.java
-  鉴权路径    → common/interceptor/LoginInterceptor.java:39-46、common/config/AppConfig.java:17-31
-  契约明细    → docs/test/contract/api-contract.md
+  鉴权路径    → common/interceptor/LoginInterceptor.java:82-106、common/config/AppConfig.java:20-37
+  契约明细    → docs/test/03-测试用例与测试数据设计.md §二（原 08-接口契约.md 已并入）
 
 ⚠️ 已知错误码冲突（代码事实，非测试臆造）：
   202 = ServiceErrorCodeConstants.ACTIVITY_PRIZE_ERROR（活动关联奖品异常）
@@ -12,13 +12,14 @@
   两者语义不同却同码 → 调用方无法区分，已登记为契约风险待业主确认。
 """
 import os
+from pathlib import Path
 
 # ==================== 环境 ====================
 BASE_URL = os.getenv("LOTTERY_BASE_URL", "http://localhost:8080")
 HTTP_TIMEOUT = float(os.getenv("LOTTERY_TIMEOUT", "15"))
 # AI 接口依赖外部大模型（DeepSeek），响应较慢
 AI_TIMEOUT = float(os.getenv("LOTTERY_AI_TIMEOUT", "90"))
-# 抽奖接口经 RabbitMQ 投递；MQ 不可达时会阻塞（缺陷 BUG-002）
+# 抽奖接口经 RabbitMQ 投递；MQ 不可达时会阻塞（缺陷 BUG-001）
 MQ_TIMEOUT = float(os.getenv("LOTTERY_MQ_TIMEOUT", "35"))
 
 # ==================== 测试数据（统一前缀，可识别、可清理） ====================
@@ -39,7 +40,27 @@ TEST_ADMIN = {
     "identity": "ADMIN",
 }
 # 管理员注册口令（来源：UserController.applyRegisterIdentityPolicy）
-ADMIN_SECRET = "lottery-admin-2024"
+# 真值只在 src/main/resources/application-local.properties（该文件不入库）；
+# 也可用环境变量 ADMIN_SECRET 覆盖（CI / 临时会话用）。
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_LOCAL_PROPS_PATH = _PROJECT_ROOT / "src" / "main" / "resources" / "application-local.properties"
+
+
+def _read_local_props() -> dict:
+    """读本机私有配置；文件不存在时返回空 dict（裸克隆里也能 import，失败只会体现在管理员用例上）。"""
+    props = {}
+    if not _LOCAL_PROPS_PATH.is_file():
+        return props
+    for line in _LOCAL_PROPS_PATH.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            props[key.strip()] = value.strip()
+    return props
+
+
+_LOCAL_PROPS = _read_local_props()
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", _LOCAL_PROPS.get("ADMIN_SECRET", ""))
 ADMIN_SECRET_HEADER = "X-Admin-Secret"
 
 # 真实基础数据（只读，绝不修改）——用于"不碰真实数据"的断言基线
@@ -81,7 +102,7 @@ class Code:
     SMS_SEND_TOO_FREQUENT = 115
     SMS_SEND_HOUR_LIMIT = 116
     SMS_SEND_FAILED = 117
-    # 修复 BUG-005 后新增：手机号未注册（区别于 114「未登记为管理员账号」）
+    # 手机号未注册（区别于 114「未登记为管理员账号」）
     PHONE_NOT_REGISTERED = 118
     # 活动（200-206；注意 202 与控制器错误码冲突）
     CREATE_ACTIVITY_EMPTY = 200
@@ -100,7 +121,9 @@ class Code:
 
 
 # ==================== 鉴权路径（契约基线） ====================
-# 需 ADMIN 身份（LoginInterceptor.java:39-46）
+# 需 ADMIN 身份（LoginInterceptor.java:82-106，16 条 path 规则覆盖 23 个端点；
+# 其中 /prize/、/api/faq/、/api/winning/manage/、/api/stat/、/api/operation-log/、
+# /api/ai/rag/ 为前缀规则，各自覆盖多个端点）
 ADMIN_ONLY_PATHS = [
     ("POST", "/activity/create"),
     ("POST", "/prize/pic/upload"),
@@ -112,8 +135,27 @@ ADMIN_ONLY_PATHS = [
     ("GET", "/api/faq/list"),
     ("GET", "/api/handover/list"),
     ("POST", "/api/handover/process"),
+    # ↓ 2026-10-16 补齐：以下 5 个端点一直在代码 adminOnly 内，但此前未纳入权限矩阵
+    #   /draw/prize 的源码注释写明「前端 localStorage.user_identity 可被伪造，服务端必须兜底」
+    ("POST", "/draw/prize"),
+    ("GET", "/api/stat/overview"),
+    ("GET", "/api/stat/activity"),
+    ("GET", "/api/operation-log/list"),
+    ("GET", "/api/ai/rag/diagnose"),
+    # ↓ 2026-10-20 新增：用户详情（配套 user-detail.html）
+    #   LoginInterceptor.java:89 精确登记为 adminOnly
+    ("GET", "/user/base-user/find-detail"),
+    # ↓ 2026-10-20 存量补齐：拦截器 adminOnly 但此前未进矩阵的 7 个端点
+    #   （LoginInterceptor.java:82-106 共 16 条规则覆盖 23 端点，至此矩阵 23 条全登记）
+    ("POST", "/activity/end"),
+    ("DELETE", "/activity/delete"),
+    ("DELETE", "/prize/delete"),
+    ("DELETE", "/api/handover/delete"),
+    ("POST", "/user/status/update"),
+    ("GET", "/api/winning/manage/list"),
+    ("POST", "/api/winning/manage/status"),
 ]
-# 免登录（AppConfig.java:17-31）
+# 免登录（AppConfig.java:20-37）
 PUBLIC_PATHS = [
     ("GET", "/user-login.html"),
     ("POST", "/user/register"),

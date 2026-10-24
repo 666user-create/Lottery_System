@@ -5,28 +5,48 @@
   <title>小东智能客服</title>
   <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
-    body { background: #f5f6fa; }
-    .chat-box { max-width: 720px; margin: 30px auto; background: #fff; border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0,0,0,.08); overflow: hidden; }
-    .chat-header { background: #4a6cf7; color: #fff; padding: 15px 20px; font-size: 18px; font-weight: bold; }
-    .chat-body { height: 460px; overflow-y: auto; padding: 20px; background: #fafbfe; }
+    /* 该页面主要作为 admin.html 的 iframe 内容使用，因此按「填满可用高度」布局：
+       原先 .chat-body 写死 height:460px，嵌入后不随容器高度变化，
+       窗口变矮时底部输入行会被挤到可视区域之外。 */
+    html, body { height: 100%; }
+    body { background: #f5f6fa; margin: 0; }
+    .chat-box { max-width: 760px; margin: 0 auto; height: 100%;
+                display: flex; flex-direction: column;
+                background: #fff; box-shadow: 0 0 20px rgba(0,0,0,.06); overflow: hidden; }
+    .chat-header { flex: 0 0 auto; background: #4a6cf7; color: #fff; padding: 15px 20px; font-size: 18px; font-weight: bold; }
+    .chat-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px; background: #fafbfe; }
     .msg { margin-bottom: 14px; display: flex; }
     .msg .bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; line-height: 1.6; white-space: pre-wrap; }
     .msg.user { justify-content: flex-end; }
     .msg.user .bubble { background: #4a6cf7; color: #fff; border-bottom-right-radius: 4px; }
     .msg.ai .bubble { background: #fff; border: 1px solid #e5e7f0; border-bottom-left-radius: 4px; }
-    .chat-footer { padding: 12px 16px; border-top: 1px solid #eee; display: flex; gap: 10px; }
+    .chat-footer { flex: 0 0 auto; padding: 12px 16px; border-top: 1px solid #eee; display: flex; gap: 10px; }
     .chat-footer input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 16px; outline: none; }
     .chat-footer button { border: none; border-radius: 20px; padding: 8px 20px; cursor: pointer; }
     #sendBtn { background: #4a6cf7; color: #fff; }
     #handoverBtn { background: #ff9800; color: #fff; }
     .typing::after { content: '...'; animation: blink 1s infinite; }
     @keyframes blink { 50% { opacity: 0; } }
+    /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+    .page-back { display: inline-flex; align-items: center; justify-content: center;
+                 width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                 color: #6b7280; text-decoration: none; flex-shrink: 0;
+                 transition: background .15s, color .15s; }
+    .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+    html.embedded .page-back { display: none !important; }
+    /* 本页表头是深蓝底，箭头改用白色描边样式（灰色箭头在蓝底上不可见） */
+    .chat-header { display: flex; align-items: center; gap: 10px; }
+    .chat-header .page-back { color: #fff; }
+    .chat-header .page-back:hover { background: rgba(255, 255, 255, .22); color: #fff; }
   </style>
+  <script>
+    /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+    try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+  </script>
 </head>
 <body>
   <div class="chat-box">
-    <div class="chat-header">🤖 小东智能客服</div>
+    <div class="chat-header"><a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>🤖 小东智能客服</div>
     <div class="chat-body" id="chatBody">
       <div class="msg ai"><div class="bubble">你好呀！我是小东，抽奖系统的智能客服。有什么可以帮你的吗？😊</div></div>
     </div>
@@ -38,7 +58,9 @@
   </div>
 
   <script>
-    // 会话ID：首次进入生成一个，存在 localStorage，刷新页面还能接着聊
+    // 会话ID：首次进入生成一个，存在 localStorage，刷新页面还能接着聊。
+    // 注意：会话记忆保存在后端 Redis，换账号登录前必须清除（见 admin.html / user-lobby.html 的 logout），
+    // 否则同一浏览器上不同账号会共用同一条会话记忆。
     let sessionId = localStorage.getItem('ai_session_id');
     if (!sessionId) {
       sessionId = 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
@@ -92,20 +114,27 @@
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          // SSE 事件以空行分隔，逐个处理
-          const events = buffer.split('\n\n');
+          // SSE：事件之间以空行分隔（兼容 CRLF）
+          const events = buffer.split(/\r?\n\r?\n/);
           buffer = events.pop();
           for (const ev of events) {
-            for (const line of ev.split('\n')) {
+            // 一个事件可以包含多行 data:（内容里的换行会拆成多行），按规范用 \n 拼回
+            const dataLines = [];
+            for (const line of ev.split(/\r?\n/)) {
               if (!line.startsWith('data:')) continue;
-              const payload = line.substring(5).trim();
-              if (payload === '[DONE]') continue;
-              // 后端返回的是普通字符串，直接拼
-              aiBubble.textContent += payload;
-              document.getElementById('chatBody').scrollTop =
-                document.getElementById('chatBody').scrollHeight;
+              let payload = line.slice(5);
+              // 规范：data: 之后若有一个空格则去掉，且只去掉一个
+              // （原实现用 .trim() 会把分词之间有意义的前后空格一并吃掉）
+              if (payload.startsWith(' ')) payload = payload.slice(1);
+              dataLines.push(payload);
             }
+            if (dataLines.length === 0) continue;
+            const payload = dataLines.join('\n');
+            if (payload === '[DONE]') continue;
+            aiBubble.textContent += payload;
           }
+          document.getElementById('chatBody').scrollTop =
+            document.getElementById('chatBody').scrollHeight;
         }
       } catch (e) {
         aiBubble.textContent = '小东：网络开小差了，请重试～(' + e.message + ')';
@@ -116,9 +145,15 @@
     }
 
     // 主动转人工(注意：转人工接口需要登录，未登录先提示)
+    let handoverSent = false;
     async function handover() {
       if (!token) {
         alert('转人工需要先登录哦，请先登录后再操作');
+        return;
+      }
+      // 防止连点创建出多张重复工单
+      if (handoverSent) {
+        alert('已经提交过转人工请求了，请耐心等待客服处理～');
         return;
       }
       const input = document.getElementById('input');
@@ -132,6 +167,7 @@
         const res = await resp.json();
         // 修复 BUG-006：成功码为 200（CommonResult.success），原判断 !== 0 会导致转人工永远失败
         if (res.code !== 200) throw new Error(res.message);
+        handoverSent = true;
         appendMsg('ai', '已为您转接人工客服，客服人员会尽快联系您～ 🙋‍♀️');
       } catch (e) {
         alert('转人工失败：' + e.message);

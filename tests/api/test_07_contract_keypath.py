@@ -1,7 +1,7 @@
 """
 第③步 · 关键路径用例（7/7）：鉴权矩阵契约
 
-来源：LoginInterceptor.java:39-46（adminOnly）+ AppConfig.java:17-31（excludes）
+来源：LoginInterceptor.java:82-106（adminOnly，16 条规则覆盖 23 端点）+ AppConfig.java:20-37（excludes）
 
 断言基线（与契约表一致）：
   - 管理接口：匿名 → HTTP 401；普通用户 → HTTP 403；管理员 → 业务可达
@@ -12,6 +12,7 @@
   - 鉴权从"401/403"退化为"业务层拦截"（HTTP 200 + 业务码），前端跳转逻辑失效
 """
 import pytest
+import allure
 
 from common import config
 from common.client import assert_success
@@ -28,6 +29,8 @@ def _call(client, method: str, path: str):
     raise ValueError(f"未支持的方法: {method}")
 
 
+@allure.feature("接口契约")
+@allure.story("401/403 权限矩阵与公开路径")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestAuthMatrix:

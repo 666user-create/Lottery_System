@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>FAQ 知识库管理</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 0 30px 30px;
+            color: #222;
+        }
+        h2 {
+            background: #fff;
+            width: 100%;
+            font-weight: 600;
+            font-size: 18px;
+            color: #000;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 0;
+            /* 标题行内插入返回箭头后补 10px 间距，箭头宽度 34px 远小于 70px 行高，不撑高标题 */
+            gap: 10px;
+        }
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 14px;
+        }
+        .panel {
+            background: #fff;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 18px;
+        }
+        .form-row { display: flex; flex-wrap: wrap; gap: 14px; }
+        .form-row .field { display: flex; flex-direction: column; }
+        .form-row .field.grow { flex: 1 1 320px; }
+        .form-row .field.fixed { flex: 0 0 200px; }
+        .form-row label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 400;
+            margin-bottom: 6px;
+        }
+        .form-row input,
+        .form-row textarea {
+            border: 1px solid #dcdcdc;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 14px;
+            outline: none;
+            font-family: inherit;
+        }
+        .form-row input:focus,
+        .form-row textarea:focus { border-color: #4C8DFB; }
+        .form-row textarea { resize: vertical; min-height: 38px; }
+        .form-actions { margin-top: 14px; }
+        .btn-primary-custom {
+            height: 36px;
+            padding: 0 22px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            background: #4C8DFB;
+            color: #fff;
+            cursor: pointer;
+        }
+        .btn-primary-custom:hover { background: #3b7ce8; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-weight: 400;
+            font-size: 13px;
+            table-layout: fixed;
+        }
+        thead th {
+            background-color: #f7f7f7;
+            color: #999;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 13px 8px;
+            text-align: center;
+            border: none;
+        }
+        tbody td {
+            padding: 12px 8px;
+            text-align: center;
+            border: none;
+            border-bottom: 1px solid #f2f2f2;
+            vertical-align: top;
+            word-break: break-word;
+        }
+        tbody td.left { text-align: left; }
+        .empty-tip { text-align: center; color: #999; font-size: 14px; padding: 30px 0; }
+        .btn-del {
+            border: 1px solid #f0b4b0;
+            background: #fff;
+            color: #d93025;
+            border-radius: 4px;
+            padding: 3px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .btn-del:hover { background: #fce8e6; }
+        .pagination-bar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-top: 18px;
+        }
+        .pagination-bar button {
+            margin: 0 3px;
+            border-radius: 5px;
+            border: 1px solid #007bff;
+            background-color: #fff;
+            padding: 3px 9px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .pagination-bar button:hover { background: #f0f6ff; }
+        .pagination-bar span { margin: 0 10px; font-size: 14px; }
+        .pagination-bar input { width: 70px; text-align: center; height: 30px; margin: 0 4px; }
+        #totalTip { font-size: 13px; color: #999; margin-right: auto; }
+        /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+        .page-back { display: inline-flex; align-items: center; justify-content: center;
+                     width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                     color: #6b7280; text-decoration: none; flex-shrink: 0;
+                     transition: background .15s, color .15s; }
+        .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        html.embedded .page-back { display: none !important; }
+    </style>
+    <script>
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+        try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+    </script>
+</head>
+<body>
+<!-- 返回箭头放在标题行最左侧，由 h2 的 flex 布局与标题同行居中 -->
+<h2><a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>FAQ 知识库管理</h2>
+
+<div class="panel">
+    <h3>新增知识条目</h3>
+    <div class="form-row">
+        <div class="field grow">
+            <label for="question">问题</label>
+            <textarea id="question" rows="2" placeholder="例如：怎么参与抽奖？"></textarea>
+        </div>
+        <div class="field fixed">
+            <label for="category">分类</label>
+            <input type="text" id="category" placeholder="例如：抽奖规则" value="通用">
+        </div>
+    </div>
+    <div class="form-row" style="margin-top:12px;">
+        <div class="field grow">
+            <label for="answer">答案</label>
+            <textarea id="answer" rows="3" placeholder="例如：登录后进入活动大厅，选择一个进行中的活动即可参与。"></textarea>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button class="btn-primary-custom" onclick="addFaq()">新增</button>
+        <button class="btn-primary-custom" style="background:#fff;color:#666;border:1px solid #d9d9d9;" onclick="resetForm()">清空</button>
+    </div>
+</div>
+
+<div class="panel">
+    <h3>知识条目列表</h3>
+    <table>
+        <thead>
+        <tr>
+            <th style="width:60px;">序号</th>
+            <th style="width:24%;">问题</th>
+            <th style="width:38%;">答案</th>
+            <th style="width:110px;">分类</th>
+            <th style="width:150px;">创建时间</th>
+            <th style="width:90px;">操作</th>
+        </tr>
+        </thead>
+        <tbody id="faqTableBody">
+        <tr><td colspan="6" class="empty-tip">加载中…</td></tr>
+        </tbody>
+    </table>
+    <div class="pagination-bar">
+        <span id="totalTip"></span>
+        <button onclick="fetchFaqs(1)">首页</button>
+        <button onclick="previousPage()">上一页</button>
+        <span>第 <input type="number" id="pageInput" min="1" value="1"> 页</span>
+        <button onclick="nextPage()">下一页</button>
+        <button onclick="goLastPage()">尾页</button>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script>
+    var userToken = localStorage.getItem("token");
+
+    var currentPage = 1;
+    var pageSize = 10;
+    var totalPages = 1;
+
+    function esc(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+
+    function formatDateTime(value) {
+        if (value == null || value === '') return '';
+        var d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        function p(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+            p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+
+    // 注意：本接口的分页参数是 page / pageSize，与活动、奖品列表的 currentPage 不同
+    function fetchFaqs(page) {
+        if (page < 1) page = 1;
+        currentPage = page;
+        $('#faqTableBody').html('<tr><td colspan="6" class="empty-tip">加载中…</td></tr>');
+
+        $.ajax({
+            url: '/api/faq/list',
+            type: 'GET',
+            data: {page: currentPage, pageSize: pageSize},
+            dataType: 'json',
+            headers: {token: userToken},
+            success: function (result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询FAQ知识库')) return;
+                if (result.code != 200) {
+                    alert('查询FAQ知识库失败！' + result.message);
+                    $('#faqTableBody').html('<tr><td colspan="6" class="empty-tip">查询失败</td></tr>');
+                    return;
+                }
+                renderFaqs(result.data);
+            },
+            error: function (err) {
+                if (window.AuthGuard && AuthGuard.handle(err, '查询FAQ知识库')) return;
+                console.log(err);
+                $('#faqTableBody').html('<tr><td colspan="6" class="empty-tip">查询失败</td></tr>');
+            }
+        });
+    }
+
+    function renderFaqs(data) {
+        var list = (data && data.list) || [];
+        var total = (data && data.total) || 0;
+        totalPages = Math.max(1, Math.ceil(total / pageSize));
+        $('#totalTip').text('共 ' + total + ' 条');
+        $('#pageInput').val(currentPage);
+
+        if (list.length === 0) {
+            $('#faqTableBody').html('<tr><td colspan="6" class="empty-tip">暂无知识条目</td></tr>');
+            return;
+        }
+
+        var rows = '';
+        // 展示用序号:按列表顺序连续编号(跨页连续),不暴露数据库主键
+        // 第 1 页 1~10、第 2 页 11~20 …… 与后端 id 升序排序一致
+        var seqBase = (currentPage - 1) * pageSize;
+        list.forEach(function (item, index) {
+            rows += '<tr>' +
+                '<td>' + (seqBase + index + 1) + '</td>' +
+                '<td class="left">' + esc(item.question) + '</td>' +
+                '<td class="left">' + esc(item.answer) + '</td>' +
+                '<td>' + esc(item.category) + '</td>' +
+                '<td>' + esc(formatDateTime(item.gmtCreate)) + '</td>' +
+                // 删除仍用真实 id(仅内部传参,不显示)
+                '<td><button class="btn-del" onclick="deleteFaq(' + esc(item.id) + ')">删除</button></td>' +
+                '</tr>';
+        });
+        $('#faqTableBody').html(rows);
+    }
+
+    function addFaq() {
+        var question = $.trim($('#question').val());
+        var answer = $.trim($('#answer').val());
+        var category = $.trim($('#category').val()) || '通用';
+
+        if (!question) { alert('请填写问题'); return; }
+        if (!answer) { alert('请填写答案'); return; }
+
+        $.ajax({
+            url: '/api/faq/add',
+            type: 'POST',
+            contentType: 'application/json',
+            dataType: 'json',
+            headers: {token: userToken},
+            data: JSON.stringify({question: question, answer: answer, category: category}),
+            success: function (result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '新增FAQ')) return;
+                if (result.code != 200) {
+                    alert('新增失败：' + result.message);
+                    return;
+                }
+                alert('新增成功！');
+                resetForm();
+                fetchFaqs(1);
+            },
+            error: function (err) {
+                if (window.AuthGuard && AuthGuard.handle(err, '新增FAQ')) return;
+                console.log(err);
+            }
+        });
+    }
+
+    function deleteFaq(id) {
+        if (!confirm('确定删除该知识条目吗？删除后其向量数据也会一并清除。')) return;
+        $.ajax({
+            url: '/api/faq/delete',
+            type: 'DELETE',
+            data: {id: id},
+            dataType: 'json',
+            headers: {token: userToken},
+            success: function (result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '删除FAQ')) return;
+                if (result.code != 200) {
+                    alert('删除失败：' + result.message);
+                    return;
+                }
+                fetchFaqs(currentPage);
+            },
+            error: function (err) {
+                if (window.AuthGuard && AuthGuard.handle(err, '删除FAQ')) return;
+                console.log(err);
+            }
+        });
+    }
+
+    function resetForm() {
+        $('#question').val('');
+        $('#answer').val('');
+        $('#category').val('通用');
+    }
+
+    function previousPage() {
+        if (currentPage > 1) fetchFaqs(currentPage - 1); else alert('已经是第一页');
+    }
+
+    function nextPage() {
+        if (currentPage < totalPages) fetchFaqs(currentPage + 1); else alert('已经是最后一页');
+    }
+
+    function goLastPage() {
+        fetchFaqs(totalPages);
+    }
+
+    $(document).ready(function () {
+        fetchFaqs(1);
+    });
+
+    $('#pageInput').on('keypress', function (e) {
+        if (e.key === 'Enter') {
+            var page = parseInt(this.value, 10);
+            if (!isNaN(page) && page >= 1 && page <= totalPages) fetchFaqs(page);
+        }
+    });
+</script>
+</body>
+</html>

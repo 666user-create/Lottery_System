@@ -83,8 +83,8 @@ curl -X POST http://localhost:8080/user/register -H "Content-Type: application/j
 # 普通用户登录,拿到 USER_TOKEN
 curl -X POST http://localhost:8080/user/password/login -H "Content-Type: application/json" -d "{\"loginName\":\"yanshou@test.com\",\"password\":\"123456\"}"
 
-# 注册管理员(携带 X-Admin-Secret 口令)
-curl -X POST http://localhost:8080/user/register -H "Content-Type: application/json" -H "X-Admin-Secret: lottery-admin-2024" -d "{\"name\":\"验收管理员\",\"mail\":\"adminys@test.com\",\"phoneNumber\":\"13900000002\",\"password\":\"123456\",\"identity\":\"ADMIN\"}"
+# 注册管理员(携带 X-Admin-Secret 口令; 口令值见本机 application-local.properties 的 ADMIN_SECRET, 不入库)
+curl -X POST http://localhost:8080/user/register -H "Content-Type: application/json" -H "X-Admin-Secret: $ADMIN_SECRET" -d "{\"name\":\"验收管理员\",\"mail\":\"adminys@test.com\",\"phoneNumber\":\"13900000002\",\"password\":\"123456\",\"identity\":\"ADMIN\"}"
 
 # 管理员登录,拿到 ADMIN_TOKEN
 curl -X POST http://localhost:8080/user/password/login -H "Content-Type: application/json" -d "{\"loginName\":\"adminys@test.com\",\"password\":\"123456\",\"mandatoryIdentity\":\"ADMIN\"}"

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>注册页面</title>
+    <link rel="stylesheet"
+          href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script
+            src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script
+            src="https://cdn.bootcdn.net/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
+    <script
+            src="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+
+        .register-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+
+        .register-container h2 {
+            font-weight: 600;
+            font-size: 32px;
+            letter-spacing: 1px;
+            color: #000000;
+            line-height: 50px;
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .show-password {
+            float: right;
+            cursor: pointer;
+            color: #008CBA;
+        }
+
+    </style>
+</head>
+<body>
+<div class="register-container">
+    <h2>填写注册信息</h2>
+    <form id="registerForm">
+        <div class="form-group">
+            <label for="name">姓名</label>
+            <input type="text" class="form-control" id="name"
+                   name="name" placeholder="请输入姓名" required>
+        </div>
+        <div class="form-group">
+            <label for="mail">邮箱</label>
+            <input type="email" class="form-control" id="mail"
+                   name="mail" placeholder="请输入邮箱" required>
+        </div>
+        <div class="form-group">
+            <label for="phoneNumber">手机号</label>
+            <input type="text" class="form-control" id="phoneNumber"
+                   name="phoneNumber" placeholder="请输入手机号" required>
+        </div>
+        <div class="form-group">
+            <label for="password">密码</label>
+            <input type="password" class="form-control" id="password"
+                   name="password" placeholder="请输入密码" required>
+        </div>
+        <div class="form-group" id="secretGroup" style="display:none;">
+            <label for="adminSecret">管理员口令 <small class="text-muted">（输入正确口令才能注册为管理员）</small></label>
+            <input type="text" class="form-control" id="adminSecret"
+                   name="adminSecret" placeholder="请输入管理员口令">
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-block mb-2" id="toggleAdmin">切换为管理员注册</button>
+        <button type="submit"
+                class="btn btn-primary btn-block">注册
+        </button>
+    </form>
+</div>
+
+<script>
+    var token = localStorage.getItem("token");
+    var params = new URLSearchParams(window.location.search);
+    /** 管理后台 iframe 内「注册用户」：仅普通用户，且不采集密码（可短信登录） */
+    var fromAdminPanel = params.get('jumpList') === 'true';
+    /** 从管理端登录页 admin-login.html 的「注册管理员」入口进来时带 ?admin=true，直接进入管理员模式 */
+    var adminMode = params.get('admin') === 'true';
+    /**
+     * 带 ?admin=true 直达 = 已明确「我就是要注册管理员」，锁定管理员模式并隐藏切换按钮。
+     *
+     * 注意这里用的是「页面加载时的初始值」，而不是 adminMode 本身：
+     * 若直接判 adminMode，正常入口点一次切换进入管理员模式后按钮也会消失，
+     * 用户就被困在管理员模式里、无法切回普通用户注册了。
+     */
+    var adminLocked = adminMode;
+
+    if (fromAdminPanel) {
+        $('#password').closest('div.form-group').css('display', 'none');
+        $('#toggleAdmin, #secretGroup').hide();
+    }
+
+    // 同步「管理员/普通用户」两种模式的界面文案（同时支持 ?admin=true 直达）
+    function syncAdminModeUI() {
+        if (adminMode) {
+            $('#secretGroup').show();
+        } else {
+            $('#secretGroup').hide();
+        }
+        if (adminLocked) {
+            // ?admin=true 直达：锁死管理员模式，不给切换入口
+            $('#toggleAdmin').hide();
+            return;
+        }
+        if (adminMode) {
+            $('#toggleAdmin').show().text('切换为普通用户注册')
+                .removeClass('btn-outline-secondary').addClass('btn-outline-danger');
+        } else {
+            $('#toggleAdmin').show().text('切换为管理员注册')
+                .removeClass('btn-outline-danger').addClass('btn-outline-secondary');
+        }
+    }
+    syncAdminModeUI();
+
+    // 切换管理员模式
+    $('#toggleAdmin').click(function() {
+        if (adminLocked) return;   // 兜底：按钮已隐藏，仍防一手脚本触发
+        adminMode = !adminMode;
+        syncAdminModeUI();
+    });
+
+    // 使用jQuery Validate插件来验证表单
+    $("#registerForm").validate({
+        rules: {
+            name: "required",
+            mail: {
+                required: true,
+                email: true
+            },
+            phoneNumber: "required",
+            password: {
+                required: !fromAdminPanel,
+                minlength: 6
+            }
+        },
+        messages: {
+            name: "请输入您的姓名",
+            mail: "请输入有效的邮箱地址",
+            phoneNumber: "请输入您的手机号",
+            password: {
+                required: "请输入密码",
+                minlength: "密码长度至少为6个字符"
+            }
+        },
+        submitHandler: function (form) {
+            var formData = {
+                name: $('#name').val(),
+                mail: $('#mail').val(),
+                phoneNumber: $('#phoneNumber').val(),
+                password: fromAdminPanel ? '' : $('#password').val(),
+                identity: fromAdminPanel ? "NORMAL" : (adminMode ? "ADMIN" : "NORMAL")
+            };
+
+            var headers = token ? { "token": token } : {};
+            // 管理员模式携带口令
+            if (adminMode) {
+                headers["X-Admin-Secret"] = $('#adminSecret').val() || '';
+            }
+
+            // 表单验证通过后，发送AJAX请求
+            $.ajax({
+                url: '/user/register',
+                type: 'POST',
+                dataType: 'json',
+                contentType: 'application/json',
+                headers: headers,
+                data: JSON.stringify(formData),
+                success: function (result) {
+                    var code = result && result.code;
+                    if (code !== 200 && code !== '200') {
+                        alert('注册失败：' + (result && result.message ? result.message : ''));
+                        return;
+                    }
+                    if (fromAdminPanel) {
+                        window.parent.postMessage({ from: 'user-list.html', id: '#userList' }, '*');
+                    }
+                    var msg = adminMode ? '管理员注册成功！' : '普通用户注册成功！';
+                    alert(msg);
+                    setTimeout(function () {
+                        if (fromAdminPanel) {
+                            // 后台 iframe 内注册：回到人员列表
+                            if (window.parent === window) {
+                                window.location.href = 'user-list.html';
+                            }
+                            return;
+                        }
+                        // 自助注册：按刚注册的身份跳对应的登录页。
+                        // 原实现无论哪种身份都跳管理端登录页 admin-login.html，
+                        // 普通用户注册完会被丢到管理员登录页，属于真实缺陷。
+                        window.location.href = adminMode ? 'admin-login.html' : 'user-login.html';
+                    }, 0);
+
+                },
+                error: function (xhr) {
+                    var msg = '网络或服务异常';
+                    try {
+                        var body = xhr.responseJSON;
+                        if (body && (body.message || body.msg)) msg = body.message || body.msg;
+                    } catch (e) {
+                    }
+                    alert('注册失败：' + msg);
+                }
+            });
+            return false; // 阻止表单默认提交行为
+        }
+    });
+</script>
+</body>
+</html>

@@ -13,8 +13,8 @@ import org.example.lottery_system.controller.result.GetActivityDetailResult;
 import org.example.lottery_system.service.ActivityService;
 import org.example.lottery_system.service.dto.ActivityDTO;
 import org.example.lottery_system.service.dto.ActivityDetailDTO;
+import org.example.lottery_system.service.dto.ActivityPageDTO;
 import org.example.lottery_system.service.dto.CreateActivityDTO;
-import org.example.lottery_system.service.dto.PageListDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +22,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -47,10 +48,14 @@ public class ActivityController {
     }
 
     @GetMapping("/find-list")
-    public CommonResult<FindActivityListResult> findActivityList(@Validated PageParam param) {
-        logger.info("findActivityList: {}",
-                JacksonUtil.writeValueAsString(param));
-        return CommonResult.success(convertToFindActivityListResult(activityService.findActivityList(param)));
+    public CommonResult<FindActivityListResult> findActivityList(
+            @Validated PageParam param,
+            // 可选筛选：RUNNING / COMPLETED，缺省或非法值均按「全部」处理
+            @RequestParam(value = "status", required = false) String status) {
+        logger.info("findActivityList: {}, status: {}",
+                JacksonUtil.writeValueAsString(param), status);
+        return CommonResult.success(
+                convertToFindActivityListResult(activityService.findActivityList(param, status)));
     }
 
     @GetMapping("/detail/find")
@@ -58,6 +63,24 @@ public class ActivityController {
         logger.info("getActivityDetail: {}", JacksonUtil.writeValueAsString(activityId));
         ActivityDetailDTO detailDTO = activityService.getActivityDetail(activityId);
         return CommonResult.success(convertToGetActivityDetailResult(detailDTO));
+    }
+
+    /* ============ 活动管理（管理端）============ */
+
+    /** 结束活动 POST /activity/end?activityId=1 —— 置为已完成并同步关联奖品/人员终态 */
+    @PostMapping("/end")
+    public CommonResult<Boolean> endActivity(@RequestParam("activityId") Long activityId) {
+        logger.info("endActivity: {}", JacksonUtil.writeValueAsString(activityId));
+        activityService.endActivity(activityId);
+        return CommonResult.success(true);
+    }
+
+    /** 删除活动 DELETE /activity/delete?activityId=1 —— 级联清理中奖记录与关联数据 */
+    @DeleteMapping("/delete")
+    public CommonResult<Boolean> deleteActivity(@RequestParam("activityId") Long activityId) {
+        logger.info("deleteActivity: {}", JacksonUtil.writeValueAsString(activityId));
+        activityService.deleteActivity(activityId);
+        return CommonResult.success(true);
     }
 
     private GetActivityDetailResult convertToGetActivityDetailResult(ActivityDetailDTO detailDTO) {
@@ -96,12 +119,15 @@ public class ActivityController {
         return result;
     }
 
-    private FindActivityListResult convertToFindActivityListResult(PageListDTO<ActivityDTO> activityList) {
+    private FindActivityListResult convertToFindActivityListResult(ActivityPageDTO activityList) {
         if (activityList == null) {
             throw new ControllerException(ControllerErrorCodeConstants.ACTIVITY_FIND_ERROR);
         }
         FindActivityListResult result = new FindActivityListResult();
         result.setTotal(activityList.getTotal());
+        // 两个状态计数一并下发，前端统计卡不再需要对当前页自行计数
+        result.setRunningCount(activityList.getRunningCount());
+        result.setCompletedCount(activityList.getCompletedCount());
         result.setRecords(activityList.getRecords().stream()
                 .map(activityDTO -> {
                     FindActivityListResult.ActivityInfo activityInfo = new FindActivityListResult.ActivityInfo();

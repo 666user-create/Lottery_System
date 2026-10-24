@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/base.css?v=20260913">
     <link rel="stylesheet" href="./css/toastr.min.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -96,6 +97,26 @@
             width: 200px;
         }
 
+        /* 管理员身份标记：管理员同样可以参与抽奖，
+           在选人列表里标出来，避免和普通用户混在一起时分不清 */
+        .user-tag-admin {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 1px 6px;
+            border: 1px solid #D40000;
+            border-radius: 3px;
+            color: #D40000;
+            font-size: 12px;
+            line-height: 1.5;
+            vertical-align: middle;
+        }
+
+        .user-empty {
+            color: #999;
+            font-size: 15px;
+            text-align: center;
+        }
+
         .prize-item select {
             margin-left: auto; /* 将下拉选择框放置在末尾 */
         }
@@ -129,15 +150,31 @@
         .pre-btn{
             margin-right: 20px;
         }
+        /* 标题是居中排版的大标题，箭头改为绝对定位到标题行最左侧：
+           既落在页面主体左上角，又完全不影响标题与表单原有排版 */
+        .container { position: relative; }
+        /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+        .page-back { position: absolute; left: 20px; top: 52px; display: inline-flex;
+                     align-items: center; justify-content: center;
+                     width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                     color: #6b7280; text-decoration: none; flex-shrink: 0;
+                     transition: background .15s, color .15s; }
+        .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        html.embedded .page-back { display: none !important; }
     </style>
+    <script>
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+        try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+    </script>
 </head>
 <body>
 <div class="container">
+    <a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>
     <h2 class="h-title">创建抽奖活动</h2>
     <form id="activityForm">
         <div class="form-group">
             <label for="activityName">活动名称</label>
-            <input type="text" placeholder="请输入活动名称" class="form-control" class="form-control" id="activityName" name="activityName" required>
+            <input type="text" placeholder="请输入活动名称" class="form-control" id="activityName" name="activityName" required>
         </div>
         <div class="form-group desc-row">
             <label for="description">活动描述</label>
@@ -212,6 +249,7 @@
                 "token": userToken
             },
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '获取奖品列表')) return;
                 if (result.code != 200) {
                     alert("获取奖品列表失败！" + result.message);
                     return;
@@ -220,28 +258,27 @@
                 var prizesContainer = $('#prizesContainer');
                 prizesContainer.empty(); // 清空当前奖品列表
                 prizes.forEach(function(prize) {
-                    prizesContainer.append(
-                        $('<div class="prize-item">').append(`
-                            <input type="checkbox" id="prize-${prize.prizeId}" name="prize-${prize.prizeId}" value="${prize.prizeId}">
-                            <label for="prize-${prize.prizeId}">${prize.prizeName}</label>
-                            <input class="form-control" type="number" name="quantity-${prize.prizeId}" min="1" value="1">
-                            <select class="form-control" name="level-${prize.prizeId}">
-                                <option value="FIRST_PRIZE" selected>一等奖</option>
-                                <option value="SECOND_PRIZE">二等奖</option>
-                                <option value="THIRD_PRIZE">三等奖</option>
-                            </select>
-                        `)
-                    );
+                    // 用 jQuery 构建节点并以 .text()/.attr() 写入，避免奖品名注入
+                    var pid = prize.prizeId;
+                    var $item = $('<div class="prize-item">');
+                    $item.append($('<input type="checkbox">')
+                        .attr('id', 'prize-' + pid).attr('name', 'prize-' + pid).val(pid));
+                    $item.append($('<label>').attr('for', 'prize-' + pid).text(prize.prizeName));
+                    $item.append($('<input class="form-control" type="number" min="1" value="1">')
+                        .attr('name', 'quantity-' + pid));
+                    var $level = $('<select class="form-control">').attr('name', 'level-' + pid);
+                    $level.append($('<option>').val('FIRST_PRIZE').text('一等奖').prop('selected', true));
+                    $level.append($('<option>').val('SECOND_PRIZE').text('二等奖'));
+                    $level.append($('<option>').val('THIRD_PRIZE').text('三等奖'));
+                    $item.append($level);
+                    prizesContainer.append($item);
                 });
             },
             error: function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '获取奖品列表')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录或登录已过期, 请重新登录!");
-                    // 跳转登录页
-                    window.location.href = "/blogin.html";
-                    window.parent.location.href = "/blogin.html";//让父页面一起跳转
-                }
             }
         });
     }
@@ -286,11 +323,19 @@
             url: '/user/base-user/find-list',
             type: 'GET',
             dataType: 'json',
-            data: { identity: 'NORMAL' },
+            // 不传 identity：后端 UserIdentityEnum.forName(null) 返回 null，
+            // selectUserListByIdentity 的 <if test="identity != null"> 会跳过过滤，
+            // 返回全部账号（含管理员）。
+            //
+            // 原来这里写死 identity:'NORMAL'，等于在候选名单层面
+            // 把管理员整个排除，导致管理员无法作为参与者参与抽奖。
+            // 管理员本人同样能中奖，2026-10-13 起不再做身份排除。
+            // 已停用（DISABLED）的账号在下方渲染时剔除，不能被选进活动。
             headers: {
                 "token": userToken
             },
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '获取人员列表')) return;
                 if (result.code != 200) {
                     alert("获取人员列表失败！" + result.message);
                     return;
@@ -298,24 +343,37 @@
                 var users = result.data;
                 var usersContainer = $('#usersContainer');
                 usersContainer.empty(); // 清空当前人员列表
+                var active = 0;
                 users.forEach(function(user) {
-                    console.info(user);
-                    usersContainer.append(
-                        $('<div class="user-item">').append(`
-                            <input type="checkbox" id="user-${user.userId}" name="user-${user.userId}" value="${user.userId}">
-                            <label for="user-${user.userId}">${user.userName}</label>
-                        `)
-                    );
+                    // 停用账号不能参与抽奖：它连登录都做不到，
+                    // 进了活动只会变成一条永远不活跃的僵尸参与记录。
+                    if (user.status && user.status !== 'ACTIVE') {
+                        return;
+                    }
+                    active++;
+                    var uid = user.userId;
+                    // 用 jQuery 构建节点并以 .text()/.attr() 写入，避免用户名注入
+                    var label = $('<label>').attr('for', 'user-' + uid)
+                        .attr('data-user-name', user.userName)
+                        .text(user.userName);
+                    if (user.identity === 'ADMIN') {
+                        // 标出管理员，避免管理员混入普通名单时看不出来
+                        label.append($('<span class="user-tag-admin">管理员</span>'));
+                    }
+                    usersContainer.append($('<div class="user-item">')
+                        .append($('<input type="checkbox">')
+                            .attr('id', 'user-' + uid).attr('name', 'user-' + uid).val(uid))
+                        .append(label));
                 });
+                if (active === 0) {
+                    usersContainer.append($('<div class="user-empty">暂无可参与的人员</div>'));
+                }
             },
             error:function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '获取人员列表')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录或登录已过期, 请重新登录!");
-                    // 跳转登录页
-                    window.location.href = "/blogin.html";
-                    window.parent.location.href = "/blogin.html";//让父页面一起跳转
-                }
             }
         });
     }
@@ -325,7 +383,13 @@
         // 将选中的奖品信息存储在selectedUsers
         $('.user-item input[type="checkbox"]:checked').each(function() {
             var userId = +$(this).val();
-            var userName = $(this).next('label').text();
+            // 必须读 data-user-name，不能用 label.text()。
+            // label 里挂着「管理员」身份标记，.text() 会把标记文字
+            // 一并读出来，存进 activity_user.user_name 后
+            // 抽奖页显示的就是「李财进管理员」这种脏数据（2026-10-13 实测）。
+            // 身份标记只是给人看的展示，不属于用户姓名。
+            var label = $(this).next('label');
+            var userName = label.attr('data-user-name') || '';
             selectedUsers.push({
                 userId: userId,
                 userName: userName
@@ -396,6 +460,7 @@
                 "token": userToken
             },
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '创建活动')) return;
                 if (result.code != 200) {
                     alert("创建失败！" + result.message);
                 } else {
@@ -409,13 +474,10 @@
                 }
             },
             error:function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '创建活动')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录或登录已过期, 请重新登录!");
-                    // 跳转登录页
-                    window.location.href = "/blogin.html";
-                    window.parent.location.href = "/blogin.html";//让父页面一起跳转
-                }
             }
         });
     }
@@ -424,18 +486,8 @@
         fetchPrizes();
         fetchUsers();
     });
-    // 显示奖品选择模态框
-    $(document).ready(function() {
-        $('#activityForm').on('click', 'button圈选奖品', function() {
-            showPrizesModal();
-        });
-    });
-    // 显示人员选择模态框
-    $(document).ready(function() {
-        $('#activityForm').on('click', 'button圈选人员', function() {
-            showUsersModal();
-        });
-    });
+    // 注：原来这里还有两个 $(document).ready 块，用 'button圈选奖品' / 'button圈选人员'
+    // 这种非法选择器做事件委托，永远不会命中（按钮上已有 onclick），属于死代码，已删除。
 </script>
 </body>
 </html>

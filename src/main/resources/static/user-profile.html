@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心</title>
+    <link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
+    <style>
+        body { background: var(--bg-color); }
+        .container { margin-top: 30px; margin-bottom: 40px; }
+        .header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .header h3 { margin: 0; }
+        .header .user-info { margin-left: auto; color: var(--gray-color); font-size: 14px; }
+        /* 左上角返回箭头:圆形、无边框,鼠标悬停浅灰底(常规返回样式) */
+        .back-arrow { display: inline-flex; align-items: center; justify-content: center;
+                      width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                      color: var(--gray-color); text-decoration: none; flex-shrink: 0;
+                      transition: background .15s, color .15s; }
+        .back-arrow:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        .profile-card { background: #fff; border-radius: 12px; padding: 28px 30px; margin-bottom: 18px; }
+        .profile-top { display: flex; align-items: center; padding-bottom: 22px; border-bottom: 1px solid #f0f2f7; margin-bottom: 22px; }
+        .avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-color), #764ba2);
+                  color: #fff; font-size: 26px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .profile-meta { margin-left: 18px; }
+        .profile-meta .name { font-size: 20px; font-weight: 700; color: #222; }
+        .profile-meta .sub { font-size: 13px; color: var(--placeholder-color); margin-top: 5px; }
+        .info-row { display: flex; padding: 13px 0; border-bottom: 1px dashed #f0f2f7; }
+        .info-row:last-child { border-bottom: none; }
+        .info-row .label { width: 100px; color: var(--gray-color); font-size: 14px; flex-shrink: 0; }
+        .info-row .value { font-size: 14px; color: #222; word-break: break-all; }
+        .info-row .value.locked { color: var(--placeholder-color); }
+        .action-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px dashed #f0f2f7; }
+        .action-item:last-child { border-bottom: none; }
+        .action-item .t { font-size: 15px; color: #222; }
+        .action-item .d { font-size: 13px; color: var(--placeholder-color); margin-top: 4px; }
+        .pending { font-size: 12px; color: #fd7e14; background: #fff4e6; padding: 3px 10px; border-radius: 10px; white-space: nowrap; }
+        .sec-title { font-size: 16px; font-weight: 700; color: #222; margin-bottom: 18px; padding-left: 12px; position: relative; }
+        .sec-title::before { content: ''; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--blue-color); border-radius: 2px; }
+        /* 账号安全弹窗 */
+        .req { color: #f5576c; }
+        .verify-box { display: flex; gap: 22px; padding-top: 4px; }
+        .verify-opt { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #444; cursor: pointer; margin: 0; font-weight: 400; }
+        .verify-opt input { margin: 0; cursor: pointer; }
+        .code-row { display: flex; gap: 10px; }
+        .code-row .form-control { flex: 1; }
+        .code-row .btn { white-space: nowrap; min-width: 108px; }
+        .hint { font-size: 12px; color: var(--placeholder-color); margin-top: 6px; }
+        .form-text-err { font-size: 13px; color: #f5576c; min-height: 18px; }
+        .field-error { font-size: 12px; color: #f5576c; margin-top: 4px; min-height: 16px; }
+        .modal-title { font-size: 17px; font-weight: 600; }
+        .modal-footer .btn { min-width: 88px; }
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时,隐藏页内自带的「返回活动大厅 / 退出登录」,
+           由外壳侧边栏负责导航;直接打开本页 URL 时两个入口都保留。
+           注意:判断依据是"是否被嵌入",不是"是否管理员" —— 管理员直接用 URL 打开时同样需要这两个入口。 */
+        html.embedded .user-flow-only { display: none !important; }
+    </style>
+    <script>
+        // 本页同时服务两个入口：
+        //   - 直接打开 / 从 user-lobby 进入 → 「返回活动大厅 / 退出登录」都显示
+        //   - 被 admin.html 侧边栏以 iframe 嵌入 → 隐藏上述入口(导航由外壳负责)
+        // 纯展示层判断；停用与权限一律由服务端把关（LoginInterceptor / verifyBySecret）。
+        try {
+            // admin-panel:身份是管理员(用于 token 失效后回 admin-login.html)
+            if (localStorage.getItem('user_identity') === 'ADMIN') {
+                document.documentElement.className += ' admin-panel';
+            }
+            // embedded:当前页面确实被 iframe 嵌入了(只有这种场景才隐藏页内导航)
+            if (window.self !== window.top) {
+                document.documentElement.className += ' embedded';
+            }
+        } catch (e) { /* 隐私模式等场景忽略，按用户端展示 */ }
+    </script>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <!-- 左上角返回箭头(常规做法):回活动大厅。被管理端外壳 iframe 嵌入时隐藏,由外壳导航 -->
+        <a href="user-lobby.html" class="back-arrow user-flow-only" title="返回活动大厅" aria-label="返回活动大厅">&#8592;</a>
+        <h3>个人中心</h3>
+        <div class="user-info">
+            <strong id="userName">---</strong>
+            <button class="btn btn-outline-danger btn-sm ml-2 user-flow-only" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <!-- 账号资料（只读） -->
+    <div class="profile-card">
+        <div class="profile-top">
+            <div class="avatar" id="avatar">用</div>
+            <div class="profile-meta">
+                <div class="name" id="nameText">---</div>
+                <div class="sub">账号资料</div>
+            </div>
+        </div>
+        <div class="info-row">
+            <div class="label">用户名</div>
+            <div class="value" id="vUserName">---</div>
+        </div>
+        <div class="info-row">
+            <div class="label">用户 ID</div>
+            <div class="value" id="vUserId">---</div>
+        </div>
+        <div class="info-row">
+            <div class="label">身份</div>
+            <div class="value" id="vIdentity">---</div>
+        </div>
+    </div>
+
+    <!-- 账号安全 -->
+    <div class="profile-card">
+        <div class="sec-title">账号安全</div>
+        <div class="action-item">
+            <div>
+                <div class="t">修改邮箱</div>
+                <div class="d">用于接收活动通知与中奖提醒</div>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" onclick="openEmailModal()">修改</button>
+        </div>
+        <div class="action-item">
+            <div>
+                <div class="t">修改密码</div>
+                <div class="d">定期更换密码有助于提升账号安全</div>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" onclick="openPwdModal()">修改</button>
+        </div>
+    </div>
+
+    <!-- 收货地址：中奖领奖时使用（领奖接口未带地址时取这里的默认值） -->
+    <div class="profile-card">
+        <div class="sec-title">收货地址</div>
+        <div class="form-group">
+            <label for="receiverName">收货人姓名 <span class="req">*</span></label>
+            <input type="text" class="form-control" id="receiverName" maxlength="50" placeholder="请输入收货人姓名">
+        </div>
+        <div class="form-group">
+            <label for="receiverPhone">手机号 <span class="req">*</span></label>
+            <input type="text" class="form-control" id="receiverPhone" maxlength="20" placeholder="请输入收货人手机号">
+        </div>
+        <div class="form-group">
+            <label for="receiverAddress">详细地址 <span class="req">*</span></label>
+            <input type="text" class="form-control" id="receiverAddress" maxlength="500" placeholder="省 / 市 / 区 + 街道门牌等详细地址">
+            <div class="hint">中奖后在「我的中奖」一键领奖，奖品将按此地址寄送</div>
+        </div>
+        <div class="form-text-err" id="receiverErr"></div>
+        <button type="button" class="btn btn-primary btn-sm" id="receiverSubmit">保存收货地址</button>
+    </div>
+</div>
+
+<!-- 修改邮箱 -->
+<div class="modal fade" id="emailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">修改邮箱</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>当前邮箱</label>
+                    <input type="text" class="form-control" id="curEmail" disabled>
+                </div>
+                <div class="form-group">
+                    <label>新邮箱 <span class="req">*</span></label>
+                    <input type="text" class="form-control" id="newEmail" placeholder="请输入新邮箱">
+                    <div class="field-error" id="emailErr"></div>
+                </div>
+                <div class="form-group">
+                    <label>验证方式 <span class="req">*</span></label>
+                    <div class="verify-box">
+                        <label class="verify-opt">
+                            <input type="radio" name="emailVerify" value="password" checked> 输入原密码
+                        </label>
+                        <label class="verify-opt">
+                            <input type="radio" name="emailVerify" value="code"> 短信验证码
+                        </label>
+                        <!-- 管理员口令：仅 ADMIN 显示（普通用户服务端也会拒，前端只是不给入口） -->
+                        <label class="verify-opt admin-only" style="display:none;">
+                            <input type="radio" name="emailVerify" value="secret"> 管理员口令
+                        </label>
+                    </div>
+                </div>
+                <!-- 原密码 -->
+                <div class="form-group verify-pane" id="emailPwdPane">
+                    <label>原密码 <span class="req">*</span></label>
+                    <input type="password" class="form-control" id="emailOldPwd" placeholder="请输入原密码">
+                </div>
+                <!-- 管理员口令 -->
+                <div class="form-group verify-pane" id="emailSecretPane" style="display:none;">
+                    <label>管理员口令 <span class="req">*</span></label>
+                    <input type="password" class="form-control" id="emailSecret" placeholder="请输入管理员口令">
+                    <div class="hint">忘记密码或收不到短信时，可用管理员口令验证身份</div>
+                </div>
+                <!-- 短信验证码 -->
+                <div class="form-group verify-pane" id="emailCodePane" style="display:none;">
+                    <label>短信验证码 <span class="req">*</span></label>
+                    <div class="code-row">
+                        <input type="text" class="form-control" id="emailCode" maxlength="4" placeholder="4位验证码">
+                        <button type="button" class="btn btn-primary" id="emailSendCode">获取验证码</button>
+                    </div>
+                    <div class="hint" id="emailCodeHint"></div>
+                </div>
+                <div class="form-text-err" id="emailFormErr"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="emailSubmit">确认修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 修改密码 -->
+<div class="modal fade" id="pwdModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">修改密码</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>验证方式 <span class="req">*</span></label>
+                    <div class="verify-box">
+                        <label class="verify-opt">
+                            <input type="radio" name="pwdVerify" value="password" checked> 输入原密码
+                        </label>
+                        <label class="verify-opt">
+                            <input type="radio" name="pwdVerify" value="code"> 短信验证码
+                        </label>
+                        <!-- 管理员口令：仅 ADMIN 显示 -->
+                        <label class="verify-opt admin-only" style="display:none;">
+                            <input type="radio" name="pwdVerify" value="secret"> 管理员口令
+                        </label>
+                    </div>
+                </div>
+                <!-- 原密码 -->
+                <div class="form-group verify-pane" id="pwdOldPane">
+                    <label>原密码 <span class="req">*</span></label>
+                    <input type="password" class="form-control" id="pwdOldPwd" placeholder="请输入原密码">
+                </div>
+                <!-- 管理员口令 -->
+                <div class="form-group verify-pane" id="pwdSecretPane" style="display:none;">
+                    <label>管理员口令 <span class="req">*</span></label>
+                    <input type="password" class="form-control" id="pwdSecret" placeholder="请输入管理员口令">
+                    <div class="hint">忘记密码或收不到短信时，可用管理员口令验证身份</div>
+                </div>
+                <!-- 短信验证码 -->
+                <div class="form-group verify-pane" id="pwdCodePane" style="display:none;">
+                    <label>短信验证码 <span class="req">*</span></label>
+                    <div class="code-row">
+                        <input type="text" class="form-control" id="pwdCode" maxlength="4" placeholder="4位验证码">
+                        <button type="button" class="btn btn-primary" id="pwdSendCode">获取验证码</button>
+                    </div>
+                    <div class="hint" id="pwdCodeHint"></div>
+                </div>
+                <div class="form-group">
+                    <label>新密码 <span class="req">*</span></label>
+                    <input type="password" class="form-control" id="newPwd" placeholder="6-12位字母或数字">
+                </div>
+                <div class="form-group">
+                    <label>确认新密码 <span class="req">*</span></label>
+                    <input type="password" class="form-control" id="newPwd2" placeholder="请再次输入新密码">
+                </div>
+                <div class="form-text-err" id="pwdFormErr"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="pwdSubmit">确认修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdn.staticfile.org/twitter-bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdn.staticfile.org/toastr.js/2.1.4/toastr.min.js"></script>
+<script>
+    /*
+     * 本页有两个入口，按入口切换行为：
+     *   - 管理端 admin.html 侧边栏(iframe 嵌入)进入 → token 失效回 admin-login.html，
+     *     「返回活动大厅 / 退出登录」隐藏(导航由外壳负责)
+     *   - 直接打开 URL / 从 user-lobby 进入 → 失效回 user-login.html，两个入口都显示
+     * 展示层用两个类区分，不要混用：
+     *   admin-panel = 身份是管理员(读 localStorage，决定失效后回哪个登录页)
+     *   embedded    = 页面确实被 iframe 嵌入(决定是否隐藏页内导航)
+     *   isAdmin     = 服务端返回的真实身份(决定能否用管理员口令验证)
+     */
+    var inAdminPanel = document.documentElement.classList.contains('admin-panel');
+    window.AUTH_GUARD_LOGIN_PAGE = inAdminPanel ? 'admin-login.html' : 'user-login.html';
+
+    var token = localStorage.getItem('token');
+    if (!token) { location.assign(window.AUTH_GUARD_LOGIN_PAGE); }
+
+    /** 服务端返回的当前登录者身份，决定是否展示「管理员口令」这一验证方式 */
+    var isAdmin = false;
+
+    function logout() { localStorage.clear(); location.assign(window.AUTH_GUARD_LOGIN_PAGE); }
+
+    $.ajax({
+        url: '/user/me',
+        headers: { token: token },
+        success: function(result) {
+            if (window.AuthGuard && AuthGuard.handle(result, '获取用户信息')) return;
+            if (result.code === 200) {
+                var d = result.data || {};
+                var name = d.userName || '用户';
+                setText('#userName', name);
+                setText('#nameText', name);
+                setText('#avatar', name.charAt(0));
+                setText('#vUserName', name);
+                setText('#vUserId', d.userId === undefined ? '---' : d.userId);
+                setText('#vIdentity', d.identity === 'ADMIN' ? '管理员' : '普通用户');
+                // 仅管理员给出「口令验证」入口。注意这是纯展示层开关：
+                // 服务端 verifyBySecret 仍会独立校验身份，普通用户硬传 verifyType=secret 会被 128 拒绝。
+                isAdmin = d.identity === 'ADMIN';
+                $('.admin-only').toggle(isAdmin);
+            } else {
+                logout();
+            }
+        },
+        error: function(xhr) {
+            if (window.AuthGuard && AuthGuard.handle(xhr, '获取用户信息')) return;
+            logout();
+        }
+    });
+
+    // 统一用 text() 写入，避免用户名字段里的特殊字符被当成 HTML 解析
+    function setText(sel, val) { $(sel).text(val); }
+
+    // ==================== 账号安全：修改邮箱 / 修改密码 ====================
+
+    function toastOk(msg) { if (window.toastr) toastr.success(msg); else alert(msg); }
+    function toastErr(msg) { if (window.toastr) toastr.error(msg); else alert(msg); }
+
+    /**
+     * 统一的响应处理：AuthGuard 先判授权失效，再看业务码。
+     * errSel 同时把错误写进表单内联区 —— 只靠 toast 会 5 秒后自动消失，
+     * 用户若正在看表单就错过了「原密码错误」这类关键提示。
+     */
+    function post(url, body, what, onOk, errSel) {
+        function fail(msg) {
+            if (errSel) { $(errSel).text(msg); }
+            toastErr(msg);
+        }
+        $.ajax({
+            url: url,
+            type: 'POST',
+            headers: { token: token },
+            dataType: 'json',
+            contentType: 'application/json',
+            data: JSON.stringify(body),
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, what)) return;
+                if (result.code === 200) { onOk(); }
+                else { fail(result.message || (what + '失败')); }
+            },
+            error: function(xhr) {
+                if (window.AuthGuard && AuthGuard.handle(xhr, what)) return;
+                var msg = what + '失败';
+                try { if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message; } catch (e) {}
+                fail(msg);
+            }
+        });
+    }
+
+    // ---- 账号安全信息：当前邮箱 + 脱敏手机号，页面加载时预取一次 ----
+    // 注意：/user/me 不返回邮箱，所以这里单独调 /user/account/security
+    var account = { email: '', maskedPhone: '' };
+
+    function loadAccountInfo() {
+        $.ajax({
+            url: '/user/account/security',
+            headers: { token: token },
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '获取账号信息')) return;
+                if (result.code === 200 && result.data) {
+                    account.email = result.data.email || '';
+                    account.maskedPhone = result.data.maskedPhoneNumber || '';
+                }
+            },
+            error: function(xhr) {
+                if (window.AuthGuard && AuthGuard.handle(xhr, '获取账号信息')) return;
+            }
+        });
+    }
+    loadAccountInfo();
+
+    function loadCurrentEmail() {
+        $('#curEmail').val(account.email || '（未设置邮箱）');
+    }
+
+    function loadMaskedPhone(sel) {
+        $(sel).text(account.maskedPhone
+            ? ('验证码将发送至 ' + account.maskedPhone)
+            : '未绑定手机号，无法使用验证码验证');
+    }
+
+    // ---- 弹窗开关 ----
+    /** 清空该弹窗所有验证方式的输入框，避免上次残留值被误提交 */
+    function clearVerifyInputs(prefix) {
+        var f = VERIFY_FIELDS[prefix];
+        Object.keys(f).forEach(function(key) { $(f[key]).val(''); });
+    }
+
+    function openEmailModal() {
+        $('#emailErr').text('');
+        $('#emailFormErr').text('');
+        $('#newEmail').val('');
+        clearVerifyInputs('email');
+        resetVerify('email');
+        loadCurrentEmail();
+        $('#emailModal').modal('show');
+    }
+
+    function openPwdModal() {
+        $('#pwdFormErr').text('');
+        clearVerifyInputs('pwd');
+        $('#newPwd').val('');
+        $('#newPwd2').val('');
+        resetVerify('pwd');
+        $('#pwdModal').modal('show');
+    }
+
+    /**
+     * 每种验证方式对应的输入区。
+     * 注意前缀不统一（改密码的原密码区叫 pwdOldPane 而非 pwdPwdPane），
+     * 所以用映射表而不是 prefix+后缀拼接。
+     */
+    var VERIFY_PANES = {
+        email: { password: '#emailPwdPane', code: '#emailCodePane', secret: '#emailSecretPane' },
+        pwd:   { password: '#pwdOldPane',   code: '#pwdCodePane',   secret: '#pwdSecretPane' }
+    };
+
+    /** 与 VERIFY_PANES 同构：每种验证方式要读取的输入框 */
+    var VERIFY_FIELDS = {
+        email: { password: '#emailOldPwd', code: '#emailCode', secret: '#emailSecret' },
+        pwd:   { password: '#pwdOldPwd',   code: '#pwdCode',   secret: '#pwdSecret' }
+    };
+
+    /**
+     * 按当前选中的验证方式，把对应字段塞进请求体。
+     * 返回 null 表示校验通过，否则返回要展示给用户的错误文案。
+     * 两种弹窗共用，避免「改邮箱/改密码」两份几乎相同的分支判断各自漂移。
+     */
+    function buildVerifyBody(prefix, body) {
+        var mode = $('input[name="' + prefix + 'Verify"]:checked').val();
+        var f = VERIFY_FIELDS[prefix];
+        if (mode === 'password') {
+            body.oldPassword = $(f.password).val();
+            return body.oldPassword ? null : '请输入原密码';
+        }
+        if (mode === 'code') {
+            body.verificationCode = $.trim($(f.code).val());
+            return body.verificationCode ? null : '请输入短信验证码';
+        }
+        if (mode === 'secret') {
+            body.adminSecret = $(f.secret).val();
+            return body.adminSecret ? null : '请输入管理员口令';
+        }
+        return '验证方式不正确';
+    }
+
+    /** 只显示当前选中的验证方式的输入区，其余隐藏，避免残留值被误提交 */
+    function applyVerifyPane(prefix, mode) {
+        var panes = VERIFY_PANES[prefix];
+        Object.keys(panes).forEach(function(key) {
+            $(panes[key]).toggle(key === mode);
+        });
+    }
+
+    /** 切换验证方式时清空另一种方式的输入，避免残留值被误提交 */
+    function resetVerify(prefix) {
+        $('input[name="' + prefix + 'Verify"][value="password"]').prop('checked', true);
+        applyVerifyPane(prefix, 'password');
+    }
+
+    $('input[name="emailVerify"]').on('change', function() {
+        var mode = $(this).val();
+        applyVerifyPane('email', mode);
+        $('#emailFormErr').text('');
+        if (mode === 'code') { loadMaskedPhone('#emailCodeHint'); }
+    });
+
+    $('input[name="pwdVerify"]').on('change', function() {
+        var mode = $(this).val();
+        applyVerifyPane('pwd', mode);
+        $('#pwdFormErr').text('');
+        if (mode === 'code') { loadMaskedPhone('#pwdCodeHint'); }
+    });
+
+    // ---- 验证码倒计时（与 user-login.html 保持一致：60 秒） ----
+    function bindSendCode(btnSel, hintSel) {
+        var timer = null;
+        $(btnSel).on('click', function() {
+            var $btn = $(this);
+            var txt = $btn.text();
+            if (txt.indexOf('获取') === -1 && txt.indexOf('重新') === -1) return;
+
+            $.ajax({
+                url: '/user/security/verification-code/send',
+                type: 'POST',
+                headers: { token: token },
+                success: function(result) {
+                    if (window.AuthGuard && AuthGuard.handle(result, '发送验证码')) return;
+                    if (result.code !== 200) {
+                        toastErr(result.message || '验证码发送失败');
+                        return;
+                    }
+                    toastOk('验证码发送成功');
+                    var num = 60;
+                    $btn.text(num + 's');
+                    timer && clearInterval(timer);
+                    timer = setInterval(function() {
+                        if (num > 1) { num--; $btn.text(num + 's'); }
+                        else { clearInterval(timer); $btn.text('重新获取'); }
+                    }, 1000);
+                },
+                error: function(xhr) {
+                    if (window.AuthGuard && AuthGuard.handle(xhr, '发送验证码')) return;
+                    var msg = '验证码发送失败';
+                    try { if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message; } catch (e) {}
+                    toastErr(msg);
+                }
+            });
+        });
+    }
+    bindSendCode('#emailSendCode', '#emailCodeHint');
+    bindSendCode('#pwdSendCode', '#pwdCodeHint');
+
+    // ---- 提交：修改邮箱 ----
+    $('#emailSubmit').on('click', function() {
+        var newEmail = $.trim($('#newEmail').val());
+        var verifyType = $('input[name="emailVerify"]:checked').val();
+        $('#emailErr').text('');
+        $('#emailFormErr').text('');
+
+        if (!newEmail) { $('#emailErr').text('请输入新邮箱'); return; }
+        if (!/^[a-zA-Z0-9]+([._\-]*[a-zA-Z0-9])*@([a-zA-Z0-9]+[-a-zA-Z0-9]*[a-zA-Z0-9]+.){1,63}[a-zA-Z0-9]+$/.test(newEmail)) {
+            $('#emailErr').text('邮箱格式不正确'); return;
+        }
+        var body = { newEmail: newEmail, verifyType: verifyType };
+        var verifyErr = buildVerifyBody('email', body);
+        if (verifyErr) { $('#emailFormErr').text(verifyErr); return; }
+
+        var $btn = $(this).prop('disabled', true).text('提交中...');
+        post('/user/email/update', body, '修改邮箱', function() {
+            account.email = newEmail;   // 同步缓存，下次打开弹窗回填新邮箱
+            $('#emailModal').modal('hide');
+            toastOk('邮箱修改成功');
+        }, '#emailFormErr');
+        // 无论成败都恢复按钮，避免失败后卡在「提交中」
+        setTimeout(function() { $btn.prop('disabled', false).text('确认修改'); }, 600);
+    });
+
+    // ---- 提交：修改密码 ----
+    $('#pwdSubmit').on('click', function() {
+        var verifyType = $('input[name="pwdVerify"]:checked').val();
+        var newPwd = $('#newPwd').val();
+        var newPwd2 = $('#newPwd2').val();
+        $('#pwdFormErr').text('');
+
+        var body = { newPassword: newPwd, verifyType: verifyType };
+        var verifyErr = buildVerifyBody('pwd', body);
+        if (verifyErr) { $('#pwdFormErr').text(verifyErr); return; }
+
+        if (!newPwd) { $('#pwdFormErr').text('请输入新密码'); return; }
+        if (!/^[0-9A-Za-z]{6,12}$/.test(newPwd)) {
+            $('#pwdFormErr').text('新密码需为6-12位字母或数字'); return;
+        }
+        if (newPwd !== newPwd2) { $('#pwdFormErr').text('两次输入的新密码不一致'); return; }
+
+        var $btn = $(this).prop('disabled', true).text('提交中...');
+        post('/user/password/update', body, '修改密码', function() {
+            $('#pwdModal').modal('hide');
+            toastOk('密码修改成功');
+        }, '#pwdFormErr');
+        setTimeout(function() { $btn.prop('disabled', false).text('确认修改'); }, 600);
+    });
+
+    // ==================== 收货地址（中奖领奖用） ====================
+    /*
+     * 与 /api/winning/claim 共用同一份默认地址：领奖接口不带收货信息时取这里的值。
+     * 校验口径与服务端一致（三项任一为空即 600），前端只拦「空」，
+     * 不额外发明手机号格式规则——服务端 saveReceiverInfo 只做非空校验，
+     * 前端加严会把服务端接受的数据挡在外面。
+     */
+    function loadReceiverInfo() {
+        $.ajax({
+            url: '/user/receiver-info',
+            headers: { token: token },
+            success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询收货地址')) return;
+                if (result.code !== 200 || !result.data) return;   // 读不到就留空，让用户自己填
+                var d = result.data;
+                $('#receiverName').val(d.receiverName || '');
+                $('#receiverPhone').val(d.receiverPhone || '');
+                $('#receiverAddress').val(d.receiverAddress || '');
+            },
+            error: function(xhr) {
+                // 401/403 交给 AuthGuard；其余静默（读不到不影响用户手动填写并保存）
+                if (window.AuthGuard && AuthGuard.handle(xhr, '查询收货地址')) return;
+            }
+        });
+    }
+    loadReceiverInfo();
+
+    $('#receiverSubmit').on('click', function() {
+        var name = $.trim($('#receiverName').val());
+        var phone = $.trim($('#receiverPhone').val());
+        var address = $.trim($('#receiverAddress').val());
+        $('#receiverErr').text('');
+
+        if (!name) { $('#receiverErr').text('请输入收货人姓名'); return; }
+        if (!phone) { $('#receiverErr').text('请输入收货人手机号'); return; }
+        if (!address) { $('#receiverErr').text('请输入详细地址'); return; }
+
+        var $btn = $(this).prop('disabled', true).text('保存中...');
+        post('/user/receiver-info',
+            { receiverName: name, receiverPhone: phone, receiverAddress: address },
+            '保存收货地址',
+            function() { toastOk('收货地址已保存'); },
+            '#receiverErr');
+        // 无论成败都恢复按钮，避免失败后卡在「保存中」
+        setTimeout(function() { $btn.prop('disabled', false).text('保存收货地址'); }, 600);
+    });
+
+    // 关闭弹窗时清空密码框，避免明文留在 DOM 里
+    $('#emailModal, #pwdModal').on('hidden.bs.modal', function() {
+        $(this).find('input[type="password"]').val('');
+        $(this).find('input[type="text"]').val('');
+    });
+</script>
+</body>
+</html>

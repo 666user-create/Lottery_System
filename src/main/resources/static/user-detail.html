@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>用户详情</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 0 30px;
+        }
+        /* 标题行：与 user-list.html 同款（左侧返回箭头 + 标题） */
+        .detail-wrap h2 {
+            background: #fff;
+            width: 100%;
+            font-weight: 600;
+            font-size: 18px;
+            color: #000000;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 0;
+        }
+        /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+        .page-back { display: inline-flex; align-items: center; justify-content: center;
+                     width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                     color: #6b7280; text-decoration: none; flex-shrink: 0;
+                     transition: background .15s, color .15s; }
+        .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        html.embedded .page-back { display: none !important; }
+
+        /* 详情卡片：两段分组，字段用「左标签 / 右值」的键值对排布 */
+        .detail-card {
+            background: #fff;
+            border-radius: 6px;
+            padding: 8px 24px 20px;
+            margin-bottom: 20px;
+        }
+        .detail-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            padding: 16px 0 4px;
+            border-bottom: 1px solid #f0f0f0;
+            margin-bottom: 6px;
+        }
+        .detail-row {
+            display: flex;
+            align-items: flex-start;
+            padding: 13px 0;
+            border-bottom: 1px dashed #f2f2f2;
+            font-size: 14px;
+        }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-row .k {
+            width: 130px;
+            flex-shrink: 0;
+            color: #999;
+            text-align: right;
+            padding-right: 20px;
+        }
+        .detail-row .v {
+            color: #333;
+            flex: 1;
+            word-break: break-all;   /* 地址等长文本换行，不撑破布局 */
+        }
+        .detail-row .v.empty { color: #bbb; }
+        /* 状态徽章：与 user-list.html 同款 */
+        .status-badge {
+            display: inline-block;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        .status-badge.active { color: #1E8E3E; background: #E7F4EC; }
+        .status-badge.disabled { color: #999; background: #F2F2F2; }
+        /* 加载/失败提示 */
+        .detail-msg { padding: 60px 0; text-align: center; color: #999; font-size: 14px; }
+        .detail-msg.err { color: #E52822; }
+        /* 「返回列表」按钮：与 .btn-mini 同款视觉 */
+        .btn-mini {
+            font-size: 13px;
+            padding: 6px 16px;
+            border-radius: 4px;
+            border: 1px solid #999;
+            background: #fff;
+            color: #666;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all .2s;
+        }
+        .btn-mini:hover { color: #4C8DFB; border-color: #4C8DFB; }
+    </style>
+    <script>
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+        try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+    </script>
+</head>
+<body>
+<div class="detail-wrap">
+    <h2><a href="user-list.html" class="page-back" title="返回账号列表" aria-label="返回账号列表">&#8592;</a>用户详情</h2>
+
+    <div id="detailLoading" class="detail-msg">加载中…</div>
+    <div id="detailBody" style="display:none;"></div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script>
+    var token = localStorage.getItem("token");
+
+    // 详情页由 user-list.html 带 ?userId= 跳转而来
+    var params = new URLSearchParams(window.location.search);
+    var userId = params.get('userId');
+
+    // 时间格式化：与 admin-claim.html 的 formatDateTime 保持一致（本地时区、补零到秒）
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function formatDateTime(value) {
+        if (value === null || value === undefined || value === '') return '-';
+        var d;
+        var raw = String(value);
+        if (/^[0-9]+$/.test(raw)) {
+            d = new Date(raw.length <= 10 ? Number(raw) * 1000 : Number(raw));
+        } else {
+            d = new Date(value);
+        }
+        if (isNaN(d.getTime())) return String(value);
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+            pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    // HTML 转义：用户名/地址等由用户填写，直接拼进 innerHTML 会被注入
+    function esc(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // 一行「标签 + 值」；空值统一显示灰色的「未填写」
+    function row(label, value) {
+        var empty = (value === null || value === undefined || String(value).trim() === '');
+        return '<div class="detail-row">' +
+            '<div class="k">' + esc(label) + '</div>' +
+            '<div class="v' + (empty ? ' empty' : '') + '">' + (empty ? '未填写' : esc(value)) + '</div>' +
+            '</div>';
+    }
+
+    // 状态单独渲染成徽章（与列表页视觉一致）
+    function statusRow(status, statusText) {
+        var disabled = status === 'DISABLED';
+        return '<div class="detail-row">' +
+            '<div class="k">账号状态</div>' +
+            '<div class="v"><span class="status-badge ' + (disabled ? 'disabled' : 'active') + '">' +
+            esc(statusText || (disabled ? '已停用' : '正常')) + '</span></div>' +
+            '</div>';
+    }
+
+    function showError(msg) {
+        $('#detailLoading').addClass('err').text(msg).show();
+        $('#detailBody').hide();
+    }
+
+    function loadDetail() {
+        if (!userId) { showError('缺少 userId 参数，请从账号列表进入'); return; }
+
+        $.ajax({
+            url: '/user/base-user/find-detail?userId=' + encodeURIComponent(userId),
+            type: 'GET',
+            headers: { token: token },
+            success: function (result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询用户详情')) return;
+                if (result.code !== 200) { showError('查询失败：' + (result.message || '未知错误')); return; }
+
+                var u = result.data;
+                // 用拼 HTML + 手动转义写入：用户名/地址等由用户填写，直接 innerHTML 会被注入
+                var html = '';
+                html += '<div class="detail-card"><h3>基本资料</h3>';
+                html += row('用户ID', u.userId);
+                html += row('用户名', u.userName);
+                html += row('邮箱', u.email);
+                html += row('手机号', u.phoneNumber);
+                html += row('身份', u.identityText || u.identity);
+                html += statusRow(u.status, u.statusText);
+                html += '</div>';
+
+                html += '<div class="detail-card"><h3>收货信息（领奖发货用）</h3>';
+                html += row('收货人姓名', u.receiverName);
+                html += row('收货人手机号', u.receiverPhone);
+                html += row('收货地址', u.receiverAddress);
+                html += '</div>';
+
+                html += '<div class="detail-card"><h3>时间信息</h3>';
+                html += row('注册时间', formatDateTime(u.gmtCreate));
+                html += row('最后修改时间', formatDateTime(u.gmtModified));
+                html += '</div>';
+
+                html += '<div style="padding-bottom:20px;"><button class="btn-mini" onclick="history.back()">返回列表</button></div>';
+
+                $('#detailBody').html(html).show();
+                $('#detailLoading').hide();
+            },
+            error: function (err) {
+                if (window.AuthGuard && AuthGuard.handle(err, '查询用户详情')) return;
+                showError('查询失败，请稍后重试');
+            }
+        });
+    }
+
+    $(document).ready(function () {
+        loadDetail();
+    });
+</script>
+</body>
+</html>

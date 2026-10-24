@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>抽奖页面</title>
+    <script src="./js/auth-guard.js?v=20260916"></script>
     <style type="text/css">
         * {
             margin: 0;
@@ -78,6 +79,15 @@
             background-color: #D40000;
             color: #fff;
         }
+        /* 抽奖结束后的「已全部抽完」：置灰且不再有 hover 反色，
+           让"这里是终点"一眼可见，而不是让人反复点怀疑页面卡了 */
+        .opt-box .btn.disabled,
+        .opt-box .btn.disabled:hover{
+            background-color: transparent;
+            color: #999;
+            border-color: #ccc;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 
@@ -88,7 +98,10 @@
     <img id="image" />
     <div id="list"></div>
     <div class="opt-box">
-        <span class="btn pre-btn" onclick="previousStep()">查看上一奖项</span>
+        <!-- 左侧是"奖项导航"按钮：随当前位置在上一/下一之间切换
+             （在最前档显示「查看下一奖项」，在最后档显示「查看上一奖项」）。
+             实际文案与 onclick 由 updateNavButton() 按 step 维护。 -->
+        <span class="btn pre-btn" onclick="navStep()">查看下一奖项</span>
         <span class="btn next-btn" onclick="nextStep()">开始抽奖</span>
     </div>
 </div>
@@ -114,6 +127,10 @@
     var names = null
     // 正在做什么
     var state = ''
+    // 抽奖是否已全部结束（2026-10-13 新增）
+    // 为 true 时 nextStep() 直接返回，按钮同时置灰，
+    // 避免结束后再点又重查一遍同一份名单、看上去毫无反应。
+    var finished = false
 
     // 等待DOM加载完成
     document.addEventListener('DOMContentLoaded', function() {
@@ -134,7 +151,7 @@
     // showPic函数用于显示图片和奖品信息。
     // 它将data.disc设置为disc元素的innerHTML，将data.image设置为image元素的src属性，然后显示图片并隐藏列表。
     function showPic(data) {
-        disc.innerHTML = data.tiers + ' ' + data.name + ' ' + data.prizeAmount + '份'
+        disc.textContent = data.tiers + ' ' + data.name + ' ' + data.prizeAmount + '份'
         image.src = data.imageUrl ? data.imageUrl : '/pic/defaultPrizeImg.png'
         image.style.display = 'inline'
         list.style.display = 'none'
@@ -145,7 +162,7 @@
 
     // 查询中奖记录
     function showRecords() {
-        disc.innerHTML = "中奖名单"
+        disc.textContent = "中奖名单"
         image.style.display = 'none'
         list.style.display = 'block'
         while (list.hasChildNodes()) {
@@ -261,7 +278,7 @@
     // showBlink函数用于显示闪烁的文字。
     // 它首先设置奖品信息，隐藏图片，显示列表，然后创建与data.count相等数量的span元素。
     function showBlink(data) {
-        disc.innerHTML = data.tiers + ' ' + data.name + ' ' + data.prizeAmount + '份'
+        disc.textContent = data.tiers + ' ' + data.name + ' ' + data.prizeAmount + '份'
         image.style.display = 'none'
         list.style.display = 'block'
         var spans = []
@@ -281,7 +298,7 @@
                 })
                 // 只展示当前奖项个数的随机人名
                 for (var i = 0; i < data.prizeAmount; ++i) {
-                    spans[i].innerHTML = names[i].name
+                    spans[i].textContent = names[i].name
                 }
                 window.requestAnimationFrame(doBlink)
             }
@@ -330,7 +347,7 @@
                     data.list = luck.map(x => x)
                     for (var i = 0; i < data.list.length; ++i) {
                         var span = document.createElement('span')
-                        span.innerHTML = data.list[i].name
+                        span.textContent = data.list[i].name
                         list.appendChild(span)
                     }
                 }
@@ -340,7 +357,7 @@
 
     // showList函数用于显示静态的文字列表。它设置奖品信息，隐藏图片，显示列表，并将data.list中的数据添加到列表中。
     function showList(data) {
-        disc.innerHTML = data.tiers + ' ' + data.name + ' ' + data.prizeAmount + '份'
+        disc.textContent = data.tiers + ' ' + data.name + ' ' + data.prizeAmount + '份'
         image.style.display = 'none'
         list.style.display = 'block'
         while (list.hasChildNodes()) {
@@ -396,17 +413,16 @@
             },
             data: JSON.stringify(drawPrizesData),
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '抽奖')) return;
                 if (result.code != 200) {
                     alert("抽奖失败！" + result.message);
                 }
             },
             error:function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '抽奖')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录, 即将跳转到登录页!");
-                    // 已经被拦截器拦截了, 未登录
-                    location.href ="/blogin.html";
-                }
             }
         });
     }
@@ -414,7 +430,31 @@
     // nextStep函数用于根据当前状态显示下一个步骤的内容。
     // 它根据state的值和data.list的长度来决定是显示图片、闪烁文字还是静态文字列表，并更新step和state。
     function nextStep() {
-        var data = steps[step]
+        // 抽奖已全部结束时置 finished=true。
+        //
+        // 为什么必须有这个标志（2026-10-13 实测修复）：
+        // 抽奖结束时 showList 分支会 ++step 把 step 推到 steps.length，
+        // 但 state 仍留在 'showList'，按钮也仍可点。于是再点一次：
+        //   step(=2) < steps.length - 1(=1) 为假 → 又走 showRecords()
+        // 后端返回同一份名单、页面重绘成一样的内容 —— 看上去就是"原地踏步"。
+        // 实测运行时状态：step=2 state=showList stepsLen=2 steps[step]=undefined
+        //
+        // 顺带兜住另一个隐患：step 越界后 steps[step] 是 undefined，
+        // 下面取到的 data 也是 undefined，一旦有分支解引用它就会直接抛错、
+        // 整个页面从此点不动。这里提前 return，两个问题一起解决。
+        if (finished) {
+            return;
+        }
+        // 无论走哪个分支，都同步一次「查看上一奖项」的可用状态：
+        // 走到第一个奖项时它就该置灰，否则按钮可点却毫无反应。
+        updateNavButton();
+        var data = steps[step];
+        if (!data) {
+            // 理论上到不了这里（finished 会先拦住），留着是为了不把
+            // "索引越界" 这类问题变成一条看不懂的 TypeError。
+            console.warn('nextStep: steps[' + step + '] 不存在，已中止');
+            return;
+        }
         console.log("steps[" + step + "]:" + JSON.stringify(data))
         if (state == 'showPic') {
             if (data.valid) {
@@ -445,14 +485,23 @@
                 ++step
                 state = ''
                 nextStep()
-                changeNextButtonText('开始抽奖')
+                // 文案交给 nextStep 自己按目标奖项的实际状态决定
+                // （已抽过 → 「已抽完，下一步」；还没抽 → 「开始抽奖」）。
+                // 原来这里事后强行写死「开始抽奖」，会盖掉 nextStep 刚设好的文案：
+                // 从第一个奖项直接前进到已抽过的第二个奖项时，按钮会谎报「开始抽奖」，
+                // 用户一点就重抽一遍。
             } else {
                 // 抽奖结束，展示全量中奖列表
                 if (step == (steps.length - 1)) {
                     ++step
                 }
                 showRecords()
+                // 标记结束：此后 nextStep 不再响应，"已全部抽完"就是终点
+                finished = true
                 changeNextButtonText('已全部抽完')
+                disableNextButton()
+                // 结束后允许回看任意奖项，"上一奖项"保持可点
+                updateNavButton()
             }
         } else {
             state = 'showPic'
@@ -461,13 +510,192 @@
         }
     }
 
+    // 抽奖结束后把「下一步」按钮置灰并摘掉 onclick。
+    // 文案已经是"已全部抽完"，若仍可点，用户只会以为页面卡住。
+    function disableNextButton() {
+        var nextButton = document.querySelector('.btn.next-btn');
+        if (!nextButton) {
+            return;
+        }
+        nextButton.classList.add('disabled');
+        nextButton.removeAttribute('onclick');
+        nextButton.style.cursor = 'not-allowed';
+        nextButton.style.opacity = '0.45';
+    }
+
     // previousStep函数用于返回到上一个步骤。如果当前步骤不是第一个步骤，则减少step的值，然后调用nextStep函数。
     function previousStep() {
-        if (step > 0) {
-            --step
+        if (finished) {
+            // 抽奖已全部结束，此时 step 被推到了 steps.length（越界）。
+            // 回看时必须先退回到最后一个真实奖项，否则下面取不到数据。
+            step = steps.length - 1;
+        } else if (step <= 0) {
+            // 已经在第一个奖项了，没有"上一奖项"可看。
+            //
+            // 原来这里只在 step>0 时 --step，却不 return，于是 step 停在 0
+            // 仍继续往下执行、把第一页重画一遍 —— 表现为"在第一页还能一直
+            // 往前查看上一奖项"，按钮点多少次都停在原地。
+            return;
+        } else {
+            --step;
         }
-        state = ''
-        nextStep()
+
+        // 原来这里无条件 state=''，让 nextStep 落到最后的 else 分支、
+        // 执行 showPic 并把按钮写成「开始抽奖」—— 于是回看一个**已经抽完**的奖项时，
+        // 页面显示的是待抽状态，点一下就再抽一轮，中奖记录被覆盖。
+        //
+        // 现在保留该奖项的真实状态：
+        //   valid=false（已抽过）→ 走 showList，直接显示已中奖名单
+        //   valid=true （还没抽）  → 走 showPic，进入正常抽奖流程
+        var data = steps[step];
+        if (!data) {
+            return;
+        }
+        // 回看的语义是"停在这一档看结果"。这里刻意**不调用 nextStep**：
+        // nextStep 在 state=='showList' 时会把 ++step 并 showRecords()，
+        // step 于是又被推回越界位置、finished 又被置回 true，
+        // 「上一奖项」点了等于没点（实测 step 2→1→2，finished 刚清又被设回）。
+        //
+        // 直接展示目标奖项，再把状态锁在 showList：
+        //   valid=false（已抽过）→ 显示该档中奖名单
+        //   valid=true （还没抽）  → 显示奖品图，仍处于可抽状态
+        finished = false;
+        if (data.valid) {
+            showPic(data);
+            state = 'showPic';
+        } else {
+            showList(data);
+            state = 'showList';
+        }
+
+        var nextButton = document.querySelector('.btn.next-btn');
+        if (nextButton) {
+            nextButton.classList.remove('disabled');
+            nextButton.setAttribute('onclick', 'backToRecords()');
+            nextButton.style.cursor = '';
+            nextButton.style.opacity = '';
+        }
+        changeNextButtonText('返回中奖名单')
+
+        // 回到第一个奖项时「查看上一奖项」已经没有意义，置灰它，
+        // 否则按钮可点却毫无反应，用户会以为页面卡住
+        updateNavButton()
+    }
+
+    // 导航按钮的兜底入口。
+    // onclick 里带的是带参数的 gotoStep(n)，正常走不到这里；
+    // 保留它是为了按钮被静态绑定或参数解析失败时不至于整页报错。
+    function navStep() {
+        updateNavButton();
+        var navButton = document.querySelector('.btn.pre-btn');
+        if (!navButton) {
+            return;
+        }
+        if (navButton.textContent === '查看下一奖项' && steps && step < steps.length - 1) {
+            gotoStep(step + 1);
+        } else {
+            previousStep();
+        }
+    }
+
+    // 按当前 step 同步左侧"奖项导航"按钮的方向、文案与可用状态。
+    //
+    // 在最前档（step<=0）没有上一奖项可看，按钮改为「查看下一奖项」；
+    // 离开最前档后又变回「查看上一奖项」，可一路回溯。
+    // 单奖项活动前后都没有可去的方向，按钮直接置灰 ——
+    // 留着可点却没反应，用户会以为页面卡住。
+    function updateNavButton() {
+        var navButton = document.querySelector('.btn.pre-btn');
+        if (!navButton) {
+            return;
+        }
+        if (!steps || steps.length === 0) {
+            disable(navButton);
+            navButton.textContent = '查看上一奖项';
+            return;
+        }
+        // finished 时 step 是越界值（=steps.length），仍属"最后档之后"，
+        // 可以往回看任意一档，走「查看上一奖项」。
+        var atFirst = !finished && step <= 0;
+        // 单奖项且尚未结束：前后都没有可去的方向。
+        // 必须先判它，否则 step=0 会先命中 atFirst 走进"可跳下一档"的分支，
+        // 而 last 也是 0，gotoStep(1) 越界后什么都不发生。
+        var singleAndNotDone = steps.length === 1 && !finished;
+
+        if (singleAndNotDone) {
+            navButton.textContent = '查看下一奖项';
+            disable(navButton);
+        } else if (atFirst) {
+            navButton.textContent = '查看下一奖项';
+            navButton.setAttribute('onclick', 'gotoStep(' + (step + 1) + ')');
+            enable(navButton);
+        } else {
+            navButton.textContent = '查看上一奖项';
+            navButton.setAttribute('onclick', 'previousStep()');
+            enable(navButton);
+        }
+    }
+
+    function enable(btn) {
+        btn.classList.remove('disabled');
+        btn.style.cursor = '';
+        btn.style.opacity = '';
+    }
+
+    function disable(btn) {
+        btn.classList.add('disabled');
+        btn.removeAttribute('onclick');
+        btn.style.cursor = 'not-allowed';
+        btn.style.opacity = '0.45';
+    }
+
+    // 导航到指定奖项（由导航按钮的 onclick 以字面量 step 调用）。
+    // 只做"查看"，不改变任何奖项的抽奖状态。
+    function gotoStep(target) {
+        if (!steps || steps.length === 0) {
+            return;
+        }
+        if (target < 0 || target >= steps.length) {
+            return;
+        }
+        // 往前跳到还没抽过的档位时，不能顺手把它置成"已抽"——
+        // 这里只展示，不碰 valid / list / 后端。
+        step = target;
+        finished = false;
+        var data = steps[step];
+        if (!data) {
+            return;
+        }
+        if (data.valid) {
+            showPic(data);
+            state = 'showPic';
+            changeNextButtonText('开始抽奖');
+        } else {
+            showList(data);
+            state = 'showList';
+            changeNextButtonText('返回中奖名单');
+            var nextButton = document.querySelector('.btn.next-btn');
+            if (nextButton) {
+                enable(nextButton);
+                nextButton.setAttribute('onclick', 'backToRecords()');
+            }
+        }
+        updateNavButton();
+    }
+
+    // 回看上一奖项后，从当前奖项回到全量中奖名单。
+    function backToRecords() {
+        if (!steps || steps.length === 0) {
+            return;
+        }
+        step = steps.length;
+        state = 'showList'
+        showRecords()
+        finished = true;
+        changeNextButtonText('已全部抽完')
+        disableNextButton()
+        // 回到总名单后仍可继续回看各奖项
+        updateNavButton()
     }
 
     // 抽奖页面加载逻辑
@@ -480,9 +708,19 @@
                 // 在页面加载完成后，调用reloadConf函数并传入nextStep作为回调函数，以初始化页面显示。
                 reloadConf(nextStep)
             } else {
-                alert("抽奖未结束，由于您不是管理员，无权限限参与抽奖。请耐心等待抽奖结束后查看中奖名单");
+                alert("抽奖未结束，由于您不是管理员，无权限参与抽奖。请耐心等待抽奖结束后查看中奖名单");
             }
         } else {
+            // 活动已结束：这里只是查看名单，没有"下一步"可走。
+            // 不置灰的话，按钮可点却毫无反应（nextStep 里 steps 为 null，
+            // 一进去就 return），用户同样会以为页面卡住。
+            finished = true;
+            changeNextButtonText('已全部抽完');
+            disableNextButton();
+            var preButton = document.querySelector('.btn.pre-btn');
+            if (preButton) {
+                preButton.style.display = 'none';
+            }
             showRecords()
         }
     }
@@ -500,6 +738,7 @@
                 'token': userToken
             },
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '获取活动详情')) return;
                 if (result.code != 200) {
                     alert("获取活动详情失败！" + result.message);
                 } else {
@@ -509,12 +748,10 @@
                 }
             },
             error:function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '获取活动详情')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录, 即将跳转到登录页!");
-                    // 已经被拦截器拦截了, 未登录
-                    location.href ="/blogin.html";
-                }
             }
         });
     }

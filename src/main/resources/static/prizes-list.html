@@ -1,93 +1,113 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <title>奖品列表</title>
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="./css/base.css?v=20260913"></link>
-    <style>
+  <meta charset="UTF-8">
+  <title>奖品列表</title>
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="./css/base.css?v=20260913">
+  <script src="./js/auth-guard.js?v=20260916"></script>
+  <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #f2f2f2;
+    }
+    .prize-list {
       padding: 0 30px;
     }
-    table {
-      /* height: calc(100vh - 143px); */
-      height: 300px;
-    }
-    .table td, .table th{
-      border: none;
-    }
-    .table thead th{
-      background-color: #f7f7f7;
-      border-bottom: none;
-      font-weight: 600;
-      font-size: 16px;
-      color: #999999;
-      height: 80px;
-      line-height: 80px;
-      padding: 0;
-      position: sticky;
-      top: 0px;
-    }
-    .table tbody+tbody{
-      border-top: none;
-    }
-    .prize-table {
-      width: 100%; /* 表格宽度为容器宽度的100% */
-      height: 100vh;
+    #prizes {
+      height: calc(100vh - 134px);
       overflow-y: auto;
+      padding-right: 10px;
     }
-    .prize-table h2{
-      background: #fff;
-      width: 100%;
-      font-weight: 600;
-      font-size: 18px;
-      color: #000000;
-      height: 70px;
+    /* 与 activities-list.html 的 .activity-item 同一套视觉：浅灰卡片 + 8px 圆角 */
+    .prize-item {
       display: flex;
       align-items: center;
-      margin-bottom: 0;
-    }
-    .table-box{
-      height: calc(100vh - 140px);
-      overflow-y: auto;
-    }
-    .prize-table th, .prize-table td {
-        text-align: center;
-        vertical-align: middle;
-        padding: 10px;
-        height: 50px; /* 统一设置表头和单元格的高度 */
-    }
-    /* 第一列和第三列的样式 */
-    .prize-table th:first-child, .prize-table td:first-child,
-    .prize-table th:nth-child(3), .prize-table td:nth-child(3),
-    .prize-table th:nth-child(5), .prize-table td:nth-child(5) {
-        width: 15%; /* 设置第一列和第三列的宽度为15% */
-    }
-    /* 第四列的样式 */
-    .prize-table th:nth-child(4), .prize-table td:nth-child(4) {
-        width: 30%; /* 设置第四列的宽度为30% */
-    }
-    /* 其他列的样式（例如第二列和第五列） */
-    .prize-table th:nth-child(2), .prize-table td:nth-child(2) {
-        width: 25%; /* 保持第二列和第五列的宽度为20% */
-    }
-    .prize-table th {
-      /* 如果有特定的样式只适用于表头，可以在这里添加 */
-    }
-    .prize-table td {
-      height: 100px; /* 特定于单元格的高度设置 */
+      justify-content: space-between;
+      background-color: #f7f7f7;
+      border-radius: 8px;
+      padding: 24px;
+      padding-bottom: 12px;
+      margin-bottom: 10px;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 300px;
     }
-    .prize-table img{
+    .prize-info {
+      /* 右侧删除按钮宽度固定，左侧信息需要能被压缩，避免长描述把按钮挤出可视范围 */
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      padding-right: 20px;
+    }
+    .prize-thumb {
       width: 76px;
       height: 76px;
       border-radius: 8px;
       object-fit: scale-down;
-      border:1px solid #e4e4e4;
+      background: #fff;
+      border: 1px solid #e4e4e4;
+      flex: 0 0 76px;
+      margin-right: 18px;
+    }
+    .prize-text { min-width: 0; }
+    .prize-text h4 {
+      font-weight: 600;
+      font-size: 15px;
+      color: #000000;
+      margin-bottom: 4px;
+      /* 超长奖品名单行截断，不撑破卡片 */
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .prize-text p {
+      font-weight: 400;
+      font-size: 14px;
+      color: #666666;
+      margin: 0;
+      line-height: 28px;
+      /* 描述最多两行，第三行省略 */
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .prize-text .prize-meta {
+      font-size: 13px;
+      color: #999999;
+    }
+    /* 操作区：价值 + 删除按钮，与活动列表的 .act-ops 同款 */
+    .prize-ops {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .prize-price {
+      font-size: 15px;
+      font-weight: 600;
+      color: #000000;
+      white-space: nowrap;
+    }
+    /* 与整页朴素后台风格一致：小号描边按钮，4px 圆角 */
+    .btn-mini {
+      font-size: 13px;
+      padding: 5px 14px;
+      border-radius: 4px;
+      border: 1px solid #999;
+      background: #fff;
+      color: #666;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .2s;
+    }
+    .btn-mini:hover { color: var(--blue-color); border-color: var(--blue-color); }
+    .btn-mini.danger:hover { color: var(--red-color); border-color: var(--red-color); }
+    .prize-empty {
+      padding: 60px 0;
+      text-align: center;
+      color: #999;
+      font-size: 14px;
     }
     .pagination {
       display: flex;
@@ -96,124 +116,167 @@
       padding-right: 16px;
     }
     .pagination button {
-      margin: 0 5px; /* 按钮之间的间距保持不变 */
-      border-radius: 5px; /* 设置圆角为20像素，可以根据需要调整 */
+      margin: 0 5px;
+      border-radius: 5px;
       border: 1px solid #007bff;
       background-color: #fff;
-      padding: 0px 8px; /* 可以添加一些内边距，使按钮看起来更饱满 */
-      cursor: pointer; /* 将鼠标光标改为指针形状，提升用户体验 */
+      padding: 0 8px;
+      cursor: pointer;
       font-size: 13px;
     }
-    .pagination span{
+    .pagination span {
       margin: 0 10px;
       font-size: 14px;
     }
-    .pagination input{
+    .pagination input {
       width: 80px;
       text-align: center;
     }
+    .prize-list h2 {
+      font-weight: 600;
+      font-size: 18px;
+      color: #000000;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      margin-bottom: 0;
+      /* 标题行内插入返回箭头后补 10px 间距，箭头宽度 34px 远小于 70px 行高，不撑高标题 */
+      gap: 10px;
+    }
+    /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+    .page-back { display: inline-flex; align-items: center; justify-content: center;
+                 width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                 color: #6b7280; text-decoration: none; flex-shrink: 0;
+                 transition: background .15s, color .15s; }
+    .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+    html.embedded .page-back { display: none !important; }
   </style>
+  <script>
+    /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+    try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+  </script>
 </head>
-<body>
-<div class=" prize-table">
-    <h2>奖品列表</h2>
-    <div class="table-box">
-      <table class="table">
-        <thead>
-        <tr>
-            <th>奖品id</th>
-            <th>奖品图</th>
-            <th>奖品名</th>
-            <th>奖品描述</th>
-            <th>奖品价值</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tbody id="prizeList">
-            <!-- 奖品列表将动态插入这里 -->
-        </tbody>
-        </tbody>
-      </table>
-    </div>
-    <div class="pagination">
-        <button class="btn-outline-primary" onclick="fetchPrizes(1)">首页</button>
-        <button class="btn-outline-primary" onclick="previousPage()">上一页</button>
-        <span>第 <input type="number" id="pageInput" min="1" value="1" /> 页</span>
-        <button class="btn-outline-primary" onclick="nextPage()">下一页</button>
-        <button class="btn-outline-primary" onclick="fetchPrizes(totalPages)">尾页</button>
-    </div>
+<body style="background-color: white">
+<div class="prize-list">
+  <!-- 返回箭头放在标题行最左侧，由 h2 的 flex 布局与标题同行居中 -->
+  <h2><a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>奖品列表</h2>
+  <div id="prizes">
+    <!-- 奖品列表将动态插入这里 -->
+  </div>
+  <div class="pagination">
+    <button class="btn-outline-primary" onclick="fetchPrizes(1)">首页</button>
+    <button class="btn-outline-primary" onclick="previousPage()">上一页</button>
+    <span>第 <input type="number" id="pageInput" min="1" value="1" /> 页</span>
+    <button class="btn-outline-primary" onclick="nextPage()">下一页</button>
+    <button class="btn-outline-primary" onclick="fetchPrizes(totalPages)">尾页</button>
+  </div>
 </div>
 
-
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="./js/toastr.min.js?v=20260913"></script>
 <script>
-    var userToken = localStorage.getItem("token");
-
     var currentPage = 1;
     var pageSize = 10;
     var totalPages;
+    // 奖品总数（缓存下来，供删除后判断是否需要回退页码）
+    var totalCount = 0;
+    var userToken = localStorage.getItem("token");
 
-    // 发送AJAX请求的函数
     function fetchPrizes(page) {
-      console.log(page);
-      // 如果页码小于1，则重置为1
       if (page < 1) {
         page = 1;
       }
-
-      // 更新当前页码
       currentPage = page;
-
-      // 构建要发送的数据对象
-      var dataToSend = {
-        currentPage: currentPage,
-        pageSize: pageSize
-      };
-
-      // 发送AJAX请求
       $.ajax({
           url: '/prize/find-list',
           type: 'GET',
-          data: dataToSend, // 将分页参数作为请求数据发送
-          headers: {
-              "token": userToken
-          },
-          dataType: 'json', // 期望从服务器接收的数据类型是JSON
+          data: { currentPage: currentPage, pageSize: pageSize },
+          dataType: 'json',
+          headers: { token: userToken },
           success: function(result) {
+            if (window.AuthGuard && AuthGuard.handle(result, '查询奖品列表')) return;
             if (result.code != 200) {
                 alert("查询奖品列表失败！" + result.message);
             } else {
-                var prizes = result.data.records;
-                var prizesHtml = '';
-                // 清空现有的表格内容
-                var prizeList = $('#prizeList');
-                prizeList.empty();
-                prizes.forEach(function(prize) {
-                    var imageUrl = prize.imageUrl ? prize.imageUrl : '/pic/defaultPrizeImg.png';
-                    prizeList.append('<tr> ' +
-                            '<td>' + prize.prizeId + '</td>' +
-                            '<td><img src="' + imageUrl + '" alt="' + prize.prizeName + '" class="prize-image"></td>' +
-                            '<td>' + prize.prizeName + '</td>' +
-                            '<td>' + prize.description + '</td>' +
-                            '<td>' + prize.price + '元</td>' +
-                            '</tr>');
-                });
-                // 更新分页控件的总页数
-                totalPages = Math.ceil(result.data.total / pageSize);
-                // 更新输入框的值
+                renderPrizes(result.data.records || []);
+                totalCount = result.data.total || 0;
+                // 全部删光时 totalPages 为 0，兜底为 1，
+                // 否则「尾页/下一页」会把页码设成 0 并触发后端分页校验失败
+                totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
                 $('#pageInput').val(currentPage);
-              } // else end
-          },
-          error:function(err){
-              console.log(err);
-              if(err!=null && err.status==401){
-                  alert("用户未登录, 即将跳转到登录页!");
-                  // 跳转登录页
-                  window.location.href = "/blogin.html";
-                  window.parent.location.href = "/blogin.html";//让父页面一起跳转
               }
+          },
+          error: function(err) {
+            if (window.AuthGuard && AuthGuard.handle(err, '查询奖品列表')) return;
+            // 后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+            // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
+            console.log(err);
           }
       });
+    }
+
+    // 用 jQuery 构建节点并以 .text()/.attr() 写入，避免奖品名/描述中的特殊字符注入
+    function renderPrizes(prizes) {
+      var listContainer = $('#prizes');
+      listContainer.empty();
+      if (!prizes.length) {
+        listContainer.append($('<div class="prize-empty">').text('暂无奖品，可先去「创建奖品」添加'));
+        return;
+      }
+      prizes.forEach(function(prize) {
+        var imageUrl = prize.imageUrl ? prize.imageUrl : '/pic/defaultPrizeImg.png';
+        var priceText = (prize.price === null || prize.price === undefined || prize.price === '')
+                        ? '—' : (prize.price + '元');
+        var $info = $('<div class="prize-info">')
+          .append($('<img class="prize-thumb">')
+            .attr('src', imageUrl).attr('alt', prize.prizeName || ''))
+          .append($('<div class="prize-text">')
+            .append($('<h4>').text(prize.prizeName))
+            .append($('<p>').text(prize.description || ''))
+            .append($('<span class="prize-meta">').text('ID ' + prize.prizeId)));
+
+        var $ops = $('<div class="prize-ops">')
+          .append($('<span class="prize-price">').text(priceText))
+          .append($('<button type="button" class="btn-mini danger">')
+            .text('删除')
+            .on('click', function() { deletePrize(prize.prizeId, prize.prizeName); }));
+
+        listContainer.append($('<div class="prize-item">').append($info).append($ops));
+      });
+    }
+
+    // 删除奖品：二次确认（confirm 标题不可控，用更明确的文案）
+    function deletePrize(prizeId, prizeName) {
+      if (!confirm('确定删除奖品「' + prizeName + '」吗？\n该操作不可恢复。若奖品已被活动使用，服务端会拒绝删除。')) {
+        return;
+      }
+      $.ajax({
+        url: '/prize/delete',
+        type: 'DELETE',
+        headers: { token: userToken },
+        data: { prizeId: prizeId },
+        success: function(result) {
+          if (result.code !== 200) {
+            toastr.error(result.message || '删除奖品失败');
+            return;
+          }
+          toastr.success('奖品已删除');
+          refreshAfterChange();
+        },
+        error: function(err) {
+          if (window.AuthGuard && AuthGuard.handle(err, '删除奖品')) return;
+          toastr.error('删除奖品失败');
+        }
+      });
+    }
+
+    // 删除后刷新；若当前页已超出新的总页数则回退一页，避免停在空页
+    function refreshAfterChange() {
+      var newTotalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+      if (currentPage > newTotalPages) {
+        currentPage = newTotalPages;
+      }
+      fetchPrizes(currentPage);
     }
 
     function previousPage() {

@@ -14,6 +14,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+import allure
 
 from common import config
 from common.client import assert_success
@@ -23,6 +24,8 @@ def _unique(tag: str) -> str:
     return f"{config.TEST_PREFIX}{tag}_{uuid.uuid4().hex[:8]}"
 
 
+@allure.feature("边界与异常")
+@allure.story("并发注册/并发工单")
 @pytest.mark.boundary
 class TestConcurrency:
 

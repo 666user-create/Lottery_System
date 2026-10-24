@@ -1,0 +1,15 @@
+[
+  {
+    "name": "产品缺陷（断言失败）",
+    "matchedStatuses": ["failed"]
+  },
+  {
+    "name": "测试代码/环境问题（错误）",
+    "matchedStatuses": ["broken"]
+  },
+  {
+    "name": "已知缺陷（预期失败，BUG-002 MQ 环境）",
+    "matchedStatuses": ["skipped"],
+    "messageRegex": ".*"
+  }
+]

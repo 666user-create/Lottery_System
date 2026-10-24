@@ -19,4 +19,6 @@ public interface DrawPrizeService {
     void deleteWinnerRecords(Long activityId, Long prizeId);
     //查询中奖名单
     List<WinningRecordDTO> getRecords(ShowWinningRecordsParam param);
+    //查询我的中奖记录
+    List<WinningRecordDTO> getMyRecords(Long winnerId);
 }

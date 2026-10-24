@@ -19,4 +19,8 @@ public interface ActivityUserMapper {
 
     @Update("<script>update activity_user set status = #{status} where activity_id = #{activityId} and user_id in <foreach collection='userIds' item='userId' index='index' open='(' close=')' separator=',' >#{userId}</foreach></script>")
     void batchUpdateStatus(@Param("activityId") Long activityId, @Param("userIds") List<Long> userIds, @Param("status") String status);
+
+    // 删除活动时清理其关联人员（由 Service 在删除主表前调用）
+    @Delete("delete from activity_user where activity_id = #{activityId}")
+    int deleteByActivityId(@Param("activityId") Long activityId);
 }

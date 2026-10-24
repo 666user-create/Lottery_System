@@ -1,5 +1,7 @@
 .login-page{
-  background-color: var(--blue-color);
+  /* 清新薄荷绿 → 天空蓝，线性对角渐变。
+     卡片高度 660px 会遮住中间，对角线渐变让两侧可见角落正好看到完整过渡。 */
+  background: linear-gradient(145deg, #CFF3E4 0%, #9ADFD9 45%, #6FBEE8 100%);
   display: flex;
   align-items: center;
   overflow-y: auto;
@@ -10,18 +12,84 @@
   border-radius: 22px;
   overflow: hidden;
   background-color: var(--white-color);
+  /* 回退到 60%，配合左右对半的栅格（col-6 / col-6）。
+     左侧内容改为奖品列表后，72% 反而显得卡片偏宽、背景被吃掉过多。 */
   max-width: 60%;
   width: 100%;
-  align-items: center;
+  align-items: stretch;
+  box-shadow: 0 14px 44px rgba(31, 42, 61, .13);
 }
+/* 左侧展示区：标语 + 奖品列表（纯 CSS 绘制，不依赖图片素材）。
+   原为 <img src="./pic/login-left.png">，内容是「贴 CSS/HTML 标签」的前端插画，
+   与抽奖主题无关，且 577px 宽的图被塞进约 274px 的框会缩糊，故改为纯 CSS。 */
 .login-page .img-box{
-  background-color:var(--baby-blue) ;
-  padding: 102px 56px;
+  background: #F2FBF7;
+  padding: 72px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   box-sizing: border-box;
 }
+.login-page .ll-slogan{
+  font-size: 26px;
+  font-weight: 700;
+  color: #1F2A3D;
+  text-align: center;
+  line-height: 1.55;
+  letter-spacing: 1px;
+}
+.login-page .ll-list{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* 46px：原先 slogan 与列表之间还隔着一行副标题（约 31px），
+     删掉副标题后把这部分空间补回列表上边距，避免左栏内容挤在一起 */
+  margin-top: 46px;
+  width: 240px;
+}
+.login-page .ll-item{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-shadow: 0 3px 12px rgba(31, 42, 61, .09);
+}
+.login-page .ll-item .dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 10px;
+}
+.login-page .ll-item .nm{
+  font-size: 15px;
+  font-weight: 600;
+  color: #1F2A3D;
+}
+.login-page .ll-item .sub{
+  font-size: 12px;
+  color: #9AA8BC;
+  margin-left: auto;
+}
+/* 一等奖高亮：配色沿用 public-winners.html 的 .tier-third 一档，保持视觉语言一致 */
+.login-page .ll-item.on{
+  background: var(--blue-color);
+  box-shadow: 0 6px 18px rgba(76, 141, 251, .34);
+}
+.login-page .ll-item.on .nm{ color: #fff; }
+.login-page .ll-item.on .sub{ color: #D6E4FF; }
 .login-page .login-container{
-  padding: 0 24px;
-  height: 100%;
+  /* 上下留白，内容不贴卡片边缘 */
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  /* 这里不能写 height:100%。
+     显式高度会让 .login-box 的 align-items:stretch 失效：两栏高度不再相等，
+     且 justify-content:center 没有剩余空间可分配，表单会顶到卡片上沿。 */
 }
 .login-page h2{
   font-family: PingFangSC, PingFang SC;
@@ -116,9 +184,28 @@
     font-size: 20px;
   }
 }
+@media screen and (max-width: 1200px) and (min-width: 901px) {
+  /* lg 断点下卡片整体变窄，奖品列表需要收敛一档，否则 slogan 与列表会挤压换行 */
+  .login-page .img-box{
+    padding: 48px 28px;
+  }
+  .login-page .ll-slogan{
+    font-size: 24px;
+  }
+  .login-page .ll-list{
+    width: 200px;
+    margin-top: 28px;
+  }
+}
 @media screen and (max-width: 900px) { 
+  /* 左侧隐藏后卡片应占满可用宽度。
+     原先只改了 .login-container 的宽度，父级 .login-box 仍锁在 max-width:60%，
+     窄屏下卡片只剩 60vw 宽，表单被压扁。 */
+  .login-page .login-box{
+    max-width: 100%;
+  }
   .login-page .login-container{
-    padding: 30px 24px;
+    padding: 32px 24px;
     width: 100%;
     max-width: initial;
     flex: 0 0 100%;

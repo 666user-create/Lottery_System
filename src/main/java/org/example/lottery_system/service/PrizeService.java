@@ -16,4 +16,7 @@ public interface PrizeService {
 
     //查询奖品列表,翻页查询
     PageListDTO<PrizeDTO> findPrizeList(PageParam param);
+
+    //删除奖品（奖品仍被活动引用时拒绝删除）
+    void deletePrize(Long prizeId);
 }

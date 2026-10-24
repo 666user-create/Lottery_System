@@ -9,13 +9,14 @@
   金额     : price -1 / 0(边界) / 极大
 
 能抓到的缺陷：
-  - 长度越界直穿 DB 约束 → 500 + SQL 泄露（BUG-008 组合）
+  - 长度越界直穿 DB 约束 → 500 + SQL 泄露（BUG-004 组合）
   - price 无 @Min 校验 → 负数奖品成功入库（业务数据污染）
   - 大小写变体绕过枚举校验
 """
 import uuid
 
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code
@@ -33,6 +34,8 @@ def _reg_body(**overrides) -> dict:
     return body
 
 
+@allure.feature("边界与异常")
+@allure.story("手机号边界")
 @pytest.mark.boundary
 class TestPhoneBoundary:
 
@@ -56,6 +59,8 @@ class TestPhoneBoundary:
             assert_code(resp, expect_code, hint=f"[手机号边界-{case}]")
 
 
+@allure.feature("边界与异常")
+@allure.story("密码边界")
 @pytest.mark.boundary
 class TestPasswordBoundary:
 
@@ -76,6 +81,8 @@ class TestPasswordBoundary:
             assert_code(resp, expect, hint=f"[密码边界-{case}]")
 
 
+@allure.feature("边界与异常")
+@allure.story("身份取值边界")
 @pytest.mark.boundary
 class TestIdentityBoundary:
     """
@@ -156,13 +163,15 @@ class TestIdentityBoundary:
             f"[管理员口令] 期望 ADMIN，实际 {actual!r}（口令校验失效）")
 
 
+@allure.feature("边界与异常")
+@allure.story("字符串长度边界")
 @pytest.mark.boundary
 class TestStringLengthBoundary:
 
     def test_name_too_long(self, ensure_accounts, anon_client):
         """
         上界+1：name 超长（DB user_name varchar(255)）→ 不得 500（DB 报错 + SQL 泄露）
-        能抓到：长度校验缺失导致 Data too long 异常直穿到客户端（BUG-008 组合）。
+        能抓到：长度校验缺失导致 Data too long 异常直穿到客户端（BUG-004 组合）。
         """
         resp = anon_client.post("/user/register",
                                 json_body=_reg_body(name="A" * 300))
@@ -188,7 +197,7 @@ class TestStringLengthBoundary:
     def test_faq_answer_empty_vs_null(self, admin_client, faq_cleanup):
         """
         空值边界：answer 为空串 vs 缺字段（DB 为 NOT NULL 但空串合法）。
-        能抓到：缺字段 → DB NOT NULL 异常 → 500 + SQL 泄露（C-6/BUG-008）。
+        能抓到：缺字段 → DB NOT NULL 异常 → 500 + SQL 泄露（C-6/BUG-004）。
         """
         # 空串（合法，应成功）
         ok = admin_client.post("/api/faq/add", json_body={
@@ -209,6 +218,8 @@ class TestStringLengthBoundary:
             f"[FAQ answer缺字段] 缺必填字段导致 500（应 400 参数校验）\n 响应: {miss.brief()}")
 
 
+@allure.feature("边界与异常")
+@allure.story("奖品价格数值边界")
 @pytest.mark.boundary
 class TestNumericBoundary:
     """金额/数量边界 —— 走 multipart 契约（@RequestPart）"""

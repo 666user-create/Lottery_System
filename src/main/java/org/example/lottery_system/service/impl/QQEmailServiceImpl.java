@@ -2,6 +2,8 @@ package org.example.lottery_system.service.impl;
 
 import org.example.lottery_system.service.dto.WinnerRecordDTO;
 import org.example.lottery_system.service.QQEmailService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -12,6 +14,8 @@ import java.util.List;
 
 @Service
 public class QQEmailServiceImpl implements QQEmailService {
+
+    private static final Logger log = LoggerFactory.getLogger(QQEmailServiceImpl.class);
 
     // Spring Boot 根据 properties 文件自动配置好的发送器
     @Autowired
@@ -37,11 +41,10 @@ public class QQEmailServiceImpl implements QQEmailService {
 
             // 执行发送
             mailSender.send(message);
-            System.out.println("纯文本邮件发送成功！已发送至：" + to);
+            log.info("纯文本邮件发送成功！已发送至：{}", to);
 
         } catch (Exception e) {
-            System.err.println("邮件发送失败，原因：" + e.getMessage());
-            e.printStackTrace();
+            log.error("邮件发送失败，收件人：{}，原因：{}", to, e.getMessage(), e);
         }
     }
 
@@ -59,7 +62,7 @@ public class QQEmailServiceImpl implements QQEmailService {
         for (WinnerRecordDTO winner : winnerList) {
             // 如果没有邮箱，直接跳过
             if (winner.getWinnerEmail() == null || winner.getWinnerEmail().isEmpty()) {
-                System.out.println("用户 " + winner.getWinnerName() + " 邮箱为空，跳过发送");
+                log.warn("用户 {} 邮箱为空，跳过发送", winner.getWinnerName());
                 continue;
             }
 
@@ -84,12 +87,12 @@ public class QQEmailServiceImpl implements QQEmailService {
             // 3. 调用本类的邮件发送方法
             try {
                 sendSimpleMail(winner.getWinnerEmail(), subject, content);
-                
+
                 // 【⚠️重要避坑】如果是批量发送，千万不能发太快，否则会被QQ邮箱当做垃圾邮件屏蔽！
                 // 每次发完暂停 1 秒钟
                 Thread.sleep(1000);
             } catch (Exception e) {
-                System.err.println("给 " + winner.getWinnerEmail() + " 发送邮件失败");
+                log.error("给 {} 发送邮件失败：{}", winner.getWinnerEmail(), e.getMessage(), e);
             }
         }
     }

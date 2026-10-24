@@ -5,6 +5,7 @@
     <title>创建奖品</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/base.css?v=20260913"></link>
+    <script src="./js/auth-guard.js?v=20260916"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -107,16 +108,35 @@
             background-color: #fff;
             object-fit: scale-down;
         }
+        /* 标题是居中排版的大标题，箭头改为绝对定位到标题行最左侧：
+           既落在页面主体左上角，又完全不影响标题与表单原有排版 */
+        .title-row { position: relative; }
+        /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+        .page-back { position: absolute; left: 0; top: 8px; display: inline-flex;
+                     align-items: center; justify-content: center;
+                     width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                     color: #6b7280; text-decoration: none; flex-shrink: 0;
+                     transition: background .15s, color .15s; }
+        .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        html.embedded .page-back { display: none !important; }
     </style>
+    <script>
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+        try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+    </script>
 </head>
 <body>
 <div class="container">
-    <h2>开始创建奖品</h2>
+    <!-- 返回箭头绝对定位在标题行最左侧，不参与标题原有居中排版 -->
+    <div class="title-row">
+        <a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>
+        <h2>开始创建奖品</h2>
+    </div>
     <div id="prizeRows">
         <div class="prize-row">
             <div class="form-group">
                 <label for="prizeName">奖品名称</label>
-                <input class="form-control" type="text" placeholder="请输入奖品名称" id="prizeName" name="prizeName" class="prize-name" required>
+                <input class="form-control prize-name" type="text" placeholder="请输入奖品名称" id="prizeName" name="prizeName" required>
             </div>
             <div class="form-group">
                 <label for="prizeName">奖品图片</label>
@@ -133,11 +153,11 @@
             </div>
             <div class="form-group">
                 <label for="price">奖品价格</label>
-                <input class="form-control" placeholder="请输入奖品价格" type="number" id="price" name="price" class="prize-price" required>
+                <input class="form-control prize-price" placeholder="请输入奖品价格" type="number" id="price" name="price" required>
             </div>
             <div class="form-group">
                 <label for="description">奖品描述</label>
-                <textarea class="form-control" id="description" placeholder="请输入奖品描述"  name="description" class="prize-description" required></textarea>
+                <textarea class="form-control prize-description" id="description" placeholder="请输入奖品描述"  name="description" required></textarea>
             </div>
         </div>
     </div>
@@ -154,13 +174,27 @@
     // 提交奖品数据的函数
     function submitPrizes() {
         var formData = new FormData();
-        var file = document.getElementById("prizeImageUrl").files[0];
-        if (file) {
-            formData.append("prizePic", file);
+        // 后端 /prize/create 的 prizePic 是 @RequestPart 必填项，未选图片必须在前端拦下，
+        // 否则请求会因缺少 part 而失败（原先只在有文件时才 append，属于必现缺陷）
+        var fileInput = document.getElementById("prizeImageUrl");
+        var file = fileInput && fileInput.files[0];
+        if (!file) {
+            alert('请先选择奖品图片');
+            return;
         }
+        formData.append("prizePic", file);
+
         var prizeName = $('#prizeName').val();
         var description = $('#description').val();
         var price = $('#price').val();
+        if (!prizeName || !String(prizeName).trim()) {
+            alert('请输入奖品名称');
+            return;
+        }
+        if (price === '' || price === null || isNaN(Number(price))) {
+            alert('请输入正确的奖品价格');
+            return;
+        }
         formData.append("param", JSON.stringify({
             prizeName:prizeName,
             description:description,
@@ -177,6 +211,7 @@
             },
             data: formData,
             success: function(result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '创建奖品')) return;
                 if(result.code == 200) {
                     alert('奖品创建成功！');
 
@@ -199,16 +234,14 @@
                     // 2. 只跳当前的 iframe 内容区，左侧菜单不消失
                     window.location.href = 'prizes-list.html';
                 } else {
-                    alert('创建奖品失败：' + result.msg);
+                    alert('创建奖品失败：' + result.message);
                 }
             },
             error:function(err){
+                if (window.AuthGuard && AuthGuard.handle(err, '创建奖品')) return;
+                // 注：后端业务失败返回 HTTP 200（错误码在 body.code），此处仅处理传输层错误；
+                // 401/403 已由 AuthGuard 在 success 分支统一处理（修复 BUG-012）
                 console.log(err);
-                if(err!=null && err.status==401){
-                    alert("用户未登录, 即将跳转到登录页!");
-                    window.location.href = "/blogin.html";
-                    window.parent.location.href = "/blogin.html"; // 登录失效时让全页面跳回登录页是合理的
-                }
             }
         });
     }

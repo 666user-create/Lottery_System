@@ -13,6 +13,7 @@
 import uuid
 
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code, assert_success
@@ -32,6 +33,8 @@ def _faq_total(client) -> int:
     return resp.data.get("total", 0)
 
 
+@allure.feature("AI 客服")
+@allure.story("FAQ 知识库增删查")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestFaqKeyPath:
@@ -99,6 +102,8 @@ class TestFaqKeyPath:
             f"[越权FAQ] 期望 HTTP=403，实际 {resp.brief()}")
 
 
+@allure.feature("AI 客服")
+@allure.story("工单列表与状态流转")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestHandoverKeyPath:

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>操作日志</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/base.css?v=20260913">
+    <script src="./js/auth-guard.js?v=20260916"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 0 30px 30px;
+            color: #222;
+        }
+        h2 {
+            background: #fff;
+            width: 100%;
+            font-weight: 600;
+            font-size: 18px;
+            color: #000;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 0;
+            /* 标题行内插入返回箭头后补 10px 间距，箭头宽度 34px 远小于 70px 行高，不撑高标题 */
+            gap: 10px;
+        }
+        .panel {
+            background: #fff;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 18px;
+        }
+        /* 筛选区 */
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 14px;
+        }
+        .filter-bar .field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filter-bar label {
+            font-size: 14px;
+            color: #333;
+            font-weight: 400;
+            margin: 0;
+            white-space: nowrap;
+        }
+        .filter-bar select,
+        .filter-bar input {
+            height: 36px;
+            font-size: 14px;
+            min-width: 150px;
+        }
+        .filter-bar input[type=date] {
+            min-width: 150px;
+        }
+        .btn-query {
+            height: 36px;
+            padding: 0 22px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            background: #4C8DFB;
+            color: #fff;
+            cursor: pointer;
+        }
+        .btn-query:hover { background: #3b7ce8; }
+        .btn-reset {
+            height: 36px;
+            padding: 0 18px;
+            font-size: 14px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: #fff;
+            color: #666;
+            cursor: pointer;
+        }
+        .btn-reset:hover { border-color: #4C8DFB; color: #4C8DFB; }
+        /* 表格 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-weight: 400;
+            font-size: 13px;
+        }
+        thead th {
+            background-color: #f7f7f7;
+            color: #999;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 13px 8px;
+            text-align: center;
+            border: none;
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 12px 8px;
+            text-align: center;
+            border: none;
+            border-bottom: 1px solid #f2f2f2;
+            vertical-align: middle;
+            word-break: break-all;
+        }
+        tbody td.left { text-align: left; }
+        .empty-tip {
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+            padding: 30px 0;
+        }
+        .tag {
+            display: inline-block;
+            font-size: 12px;
+            padding: 2px 9px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        .tag-ok    { background: #e6f4ea; color: #1e8e3e; }
+        .tag-fail  { background: #fce8e6; color: #d93025; }
+        .tag-warn  { background: #fef7e0; color: #b06000; }
+        .msg { color: #999; font-size: 12px; }
+        .path {
+            font-family: Consolas, Monaco, monospace;
+            font-size: 12px;
+            color: #666;
+        }
+        /* 分页 */
+        .pagination-bar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-top: 18px;
+            padding-right: 4px;
+        }
+        .pagination-bar button {
+            margin: 0 3px;
+            border-radius: 5px;
+            border: 1px solid #007bff;
+            background-color: #fff;
+            padding: 3px 9px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .pagination-bar button:hover { background: #f0f6ff; }
+        .pagination-bar span { margin: 0 10px; font-size: 14px; }
+        .pagination-bar input {
+            width: 70px;
+            text-align: center;
+            height: 30px;
+            margin: 0 4px;
+        }
+        #totalTip { font-size: 13px; color: #999; margin-right: auto; }
+        /* 左上角返回箭头：被外壳 iframe 嵌入时隐藏（由外壳导航），直接打开 URL 时可见 */
+        .page-back { display: inline-flex; align-items: center; justify-content: center;
+                     width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1;
+                     color: #6b7280; text-decoration: none; flex-shrink: 0;
+                     transition: background .15s, color .15s; }
+        .page-back:hover { background: rgba(0, 0, 0, .06); color: #333; }
+        html.embedded .page-back { display: none !important; }
+    </style>
+    <script>
+        /* 被管理端外壳(admin.html)以 iframe 嵌入时为 <html> 加 embedded 类，用于隐藏页内返回箭头 */
+        try { if (window.self !== window.top) { document.documentElement.className += ' embedded'; } } catch (e) { }
+    </script>
+</head>
+<body>
+<!-- 返回箭头放在标题行最左侧，由 h2 的 flex 布局与标题同行居中 -->
+<h2><a href="admin.html" class="page-back" title="返回管理台" aria-label="返回管理台">&#8592;</a>操作日志</h2>
+
+<div class="panel">
+    <div class="filter-bar">
+        <div class="field">
+            <label for="moduleSelect">业务模块：</label>
+            <select class="form-control" id="moduleSelect">
+                <option value="">全部</option>
+                <option value="用户模块">用户模块</option>
+                <option value="活动模块">活动模块</option>
+                <option value="奖品模块">奖品模块</option>
+                <option value="抽奖模块">抽奖模块</option>
+                <option value="客服模块">客服模块</option>
+                <option value="其它">其它</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="identitySelect">操作人身份：</label>
+            <select class="form-control" id="identitySelect">
+                <option value="">全部</option>
+                <option value="ADMIN">管理员</option>
+                <option value="NORMAL">普通用户</option>
+                <option value="ANONYMOUS">未登录</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="startTime">起始日期：</label>
+            <input type="date" class="form-control" id="startTime">
+        </div>
+        <div class="field">
+            <label for="endTime">结束日期：</label>
+            <input type="date" class="form-control" id="endTime">
+        </div>
+        <button class="btn-query" onclick="search()">查询</button>
+        <button class="btn-reset" onclick="resetFilter()">重置</button>
+    </div>
+</div>
+
+<div class="panel">
+    <table>
+        <thead>
+        <tr>
+            <th style="width:150px;">时间</th>
+            <th style="width:110px;">操作人</th>
+            <th style="width:80px;">身份</th>
+            <th style="width:90px;">业务模块</th>
+            <th style="width:165px;">操作</th>
+            <th>结果</th>
+            <th style="width:70px;">耗时</th>
+            <th style="width:110px;">IP</th>
+        </tr>
+        </thead>
+        <tbody id="logTableBody">
+        <tr><td colspan="8" class="empty-tip">加载中…</td></tr>
+        </tbody>
+    </table>
+    <div class="pagination-bar">
+        <span id="totalTip"></span>
+        <button onclick="fetchLogs(1)">首页</button>
+        <button onclick="previousPage()">上一页</button>
+        <span>第 <input type="number" id="pageInput" min="1" value="1"> 页</span>
+        <button onclick="nextPage()">下一页</button>
+        <button onclick="goLastPage()">尾页</button>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script>
+    var userToken = localStorage.getItem("token");
+
+    var currentPage = 1;
+    var pageSize = 20;
+    var totalPages = 1;
+
+    // 统一转义，避免日志内容里的特殊字符破坏页面结构
+    function esc(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+
+    function pad(n) {
+        return (n < 10 ? '0' : '') + n;
+    }
+
+    // 后端 Date 可能以时间戳或 ISO 字符串返回，两种都兼容
+    function formatDateTime(value) {
+        if (value == null || value === '') {
+            return '';
+        }
+        var d = new Date(value);
+        if (isNaN(d.getTime())) {
+            return String(value);
+        }
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+            pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    function identityText(identity) {
+        if (identity === 'ADMIN') return '管理员';
+        if (identity === 'NORMAL') return '普通用户';
+        if (identity === 'ANONYMOUS') return '未登录';
+        return identity || '-';
+    }
+
+    // 有业务码 → 按业务码判定；没有业务码（未进入业务逻辑，如被拦截器拒绝）→ 按 HTTP 状态判定
+    function resultHtml(item) {
+        var code = item.resultCode;
+        if (code === 200) {
+            return '<span class="tag tag-ok">成功</span>';
+        }
+        if (code !== null && code !== undefined) {
+            var text = '<span class="tag tag-fail">失败 ' + code + '</span>';
+            if (item.resultMsg) {
+                text += ' <span class="msg">' + esc(item.resultMsg) + '</span>';
+            }
+            return text;
+        }
+        var status = item.httpStatus;
+        if (status === 200) {
+            // 走流式响应（SSE）的接口不经过 ResponseBodyAdvice，拿不到业务码，只能确认为已处理
+            return '<span class="tag tag-ok">已处理</span>';
+        }
+        if (status === 401) {
+            return '<span class="tag tag-warn">未登录</span>';
+        }
+        if (status === 403) {
+            return '<span class="tag tag-warn">无权限</span>';
+        }
+        return '<span class="tag tag-warn">HTTP ' + esc(status) + '</span>';
+    }
+
+    function buildQuery() {
+        return {
+            currentPage: currentPage,
+            pageSize: pageSize,
+            module: $('#moduleSelect').val(),
+            identity: $('#identitySelect').val(),
+            startTime: $('#startTime').val(),
+            endTime: $('#endTime').val()
+        };
+    }
+
+    function fetchLogs(page) {
+        if (page < 1) {
+            page = 1;
+        }
+        currentPage = page;
+        $('#logTableBody').html('<tr><td colspan="8" class="empty-tip">加载中…</td></tr>');
+
+        $.ajax({
+            url: '/api/operation-log/list',
+            type: 'GET',
+            data: buildQuery(),
+            dataType: 'json',
+            headers: {token: userToken},
+            success: function (result) {
+                if (window.AuthGuard && AuthGuard.handle(result, '查询操作日志')) return;
+                if (result.code != 200) {
+                    alert("查询操作日志失败！" + result.message);
+                    $('#logTableBody').html('<tr><td colspan="8" class="empty-tip">查询失败</td></tr>');
+                    return;
+                }
+                renderLogs(result.data);
+            },
+            error: function (err) {
+                if (window.AuthGuard && AuthGuard.handle(err, '查询操作日志')) return;
+                console.log(err);
+                $('#logTableBody').html('<tr><td colspan="8" class="empty-tip">查询失败</td></tr>');
+            }
+        });
+    }
+
+    function renderLogs(data) {
+        var records = (data && data.records) || [];
+        var total = (data && data.total) || 0;
+        totalPages = Math.max(1, Math.ceil(total / pageSize));
+        $('#totalTip').text('共 ' + total + ' 条');
+        $('#pageInput').val(currentPage);
+
+        if (records.length === 0) {
+            $('#logTableBody').html('<tr><td colspan="8" class="empty-tip">暂无操作日志</td></tr>');
+            return;
+        }
+
+        var rows = '';
+        records.forEach(function (item) {
+            var operator = item.userName
+                ? esc(item.userName) + (item.userId ? ' <span class="msg">#' + esc(item.userId) + '</span>' : '')
+                : (item.userId ? '<span class="msg">#' + esc(item.userId) + '</span>' : '-');
+            rows += '<tr>' +
+                '<td>' + esc(formatDateTime(item.gmtCreate)) + '</td>' +
+                '<td>' + operator + '</td>' +
+                '<td>' + esc(identityText(item.identity)) + '</td>' +
+                '<td>' + esc(item.module) + '</td>' +
+                '<td>' + esc(item.operation) + '</td>' +
+                '<td class="left">' + resultHtml(item) +
+                '<div class="path">' + esc(item.httpMethod) + ' ' + esc(item.path) + '</div></td>' +
+                '<td>' + (item.costMs == null ? '-' : esc(item.costMs) + 'ms') + '</td>' +
+                '<td>' + esc(item.ip) + '</td>' +
+                '</tr>';
+        });
+        $('#logTableBody').html(rows);
+    }
+
+    function search() {
+        fetchLogs(1);
+    }
+
+    function resetFilter() {
+        $('#moduleSelect').val('');
+        $('#identitySelect').val('');
+        $('#startTime').val('');
+        $('#endTime').val('');
+        fetchLogs(1);
+    }
+
+    function previousPage() {
+        if (currentPage > 1) {
+            fetchLogs(currentPage - 1);
+        } else {
+            alert("已经是第一页");
+        }
+    }
+
+    function nextPage() {
+        if (currentPage < totalPages) {
+            fetchLogs(currentPage + 1);
+        } else {
+            alert("已经是最后一页");
+        }
+    }
+
+    function goLastPage() {
+        fetchLogs(totalPages);
+    }
+
+    $(document).ready(function () {
+        fetchLogs(1);
+    });
+
+    // 页码输入框回车跳转
+    $('#pageInput').on('keypress', function (e) {
+        if (e.key === 'Enter') {
+            var page = parseInt(this.value, 10);
+            if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                fetchLogs(page);
+            }
+        }
+    });
+</script>
+</body>
+</html>

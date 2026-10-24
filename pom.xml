@@ -125,6 +125,61 @@
             <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
             <version>1.0.9</version>
         </dependency>
+
+        <!-- ===== 以下为「框架化 RAG 重构」新增依赖 ===== -->
+
+        <!-- 向量存储：SimpleVectorStore（Spring AI 内置内存向量库，可落盘 JSON，零外部中间件） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-vector-store</artifactId>
+            <version>1.0.9</version>
+        </dependency>
+
+        <!-- 本地 ONNX Embedding：TransformersEmbeddingModel（完全离线，零 API key） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-transformers</artifactId>
+            <version>1.0.9</version>
+        </dependency>
+
+        <!-- RAG Advisor：QuestionAnswerAdvisor（可自定义模板提示词） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-advisors-vector-store</artifactId>
+            <version>1.0.9</version>
+        </dependency>
+
+        <!-- 高级 RAG：DocumentPostProcessor（检索后处理/重排的扩展点） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-rag</artifactId>
+            <version>1.0.9</version>
+        </dependency>
+
+        <!-- 会话记忆：JdbcChatMemoryRepository（会话持久化到 MySQL） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
+            <version>1.0.9</version>
+        </dependency>
+
+        <!-- 可观测性：Actuator + 链路追踪(Zipkin) + 指标(Prometheus) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
     </dependencies>
 
     <repositories>

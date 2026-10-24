@@ -1,6 +1,6 @@
 package org.example.lottery_system.service.impl;
 
-import org.example.lottery_system.common.config.sms.SmsBaoConfig;
+import org.example.lottery_system.common.config.SmsBaoConfig;
 import org.example.lottery_system.service.dto.WinnerRecordDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,8 +46,25 @@ public class SmsBaoServiceImpl {
                 winner.getPrizeName(),
                 winningTimeStr
         );
+        send(phone, fullContent);
+    }
 
-        // 2. 构建请求 URI
+    /**
+     * 发送自定义内容短信(领奖发货通知等通用场景,内容自动带上签名)
+     *
+     * @param phone   手机号
+     * @param content 短信正文(不含签名)
+     */
+    public void sendCustomNotification(String phone, String content) {
+        if (phone == null || phone.isBlank()) {
+            logger.warn("手机号为空，跳过短信发送");
+            return;
+        }
+        send(phone, smsBaoConfig.getSignature() + content);
+    }
+
+    /** 统一的短信下发(构造 URI + 异步请求 + 结果处理) */
+    private void send(String phone, String fullContent) {
         URI uri = UriComponentsBuilder.fromHttpUrl(smsBaoConfig.getApiUrl())
                 .queryParam("u", smsBaoConfig.getUsername())
                 .queryParam("p", smsBaoConfig.getApiKey())
@@ -57,7 +74,6 @@ public class SmsBaoServiceImpl {
                 .encode()
                 .toUri();
 
-        // 3. 执行异步请求
         try {
             String result = restTemplate.getForObject(uri, String.class);
             handleResult(result, phone);

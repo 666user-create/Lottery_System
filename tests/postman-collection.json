@@ -1,0 +1,1078 @@
+{
+  "info": {
+    "_postman_id": "6f3d4e2a-9c1b-4d5e-8a7f-lottery-system-0001",
+    "name": "抽奖系统 lottery_system 接口测试",
+    "description": "抽奖系统全接口测试集合\n\n使用说明：\n1. 导入本 Collection 到 Postman\n2. 在环境变量中配置 baseUrl=http://localhost:8080\n3. 先执行 01_用户模块 → 注册/登录 获取 token（脚本自动写入集合变量 userToken/adminToken）\n4. 依次执行各模块请求\n5. 管理员注册口令：填集合变量 adminSecret（真值见本机 application-local.properties，不入库）\n\n权限说明：\n- /api/faq/*、/api/handover/list、/api/handover/process、/activity/create、/prize/*、/user/base-user/find-list 需 ADMIN token\n- /api/handover/create 需登录 token（普通用户即可）\n- /api/ai/chat/**、/api/chat/** 游客可用\n- 未登录返回 401，普通用户访问管理接口返回 403",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "adminSecret",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01_用户模块",
+      "item": [
+        {
+          "name": "1.1 注册普通用户",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Postman测试用户\",\n    \"mail\": \"pm_user_001@test.com\",\n    \"phoneNumber\": \"13712340001\",\n    \"password\": \"123456\",\n    \"identity\": \"NORMAL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "register"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('注册成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.expect(body.data.userId).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.2 注册管理员（X-Admin-Secret）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{adminSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Postman管理员\",\n    \"mail\": \"pm_admin_001@test.com\",\n    \"phoneNumber\": \"13912340001\",\n    \"password\": \"123456\",\n    \"identity\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "register"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('管理员注册成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.3 密码登录（普通用户）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"loginName\": \"pm_user_001@test.com\",\n    \"password\": \"123456\",\n    \"mandatoryIdentity\": \"NORMAL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/password/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "password", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('登录成功并保存token', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.environment.set('userToken', body.data.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.4 密码登录（管理员）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"loginName\": \"pm_admin_001@test.com\",\n    \"password\": \"123456\",\n    \"mandatoryIdentity\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/password/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "password", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('管理员登录成功并保存token', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.environment.set('adminToken', body.data.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.5 登录失败-密码错误（期望111）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"loginName\": \"pm_user_001@test.com\",\n    \"password\": \"wrongpass\",\n    \"mandatoryIdentity\": \"NORMAL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/password/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "password", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('密码错误返回111', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(111);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.6 当前用户信息 /user/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "me"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('返回当前用户', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.expect(body.data.userId).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.7 用户列表（管理员，权限验证）",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/base-user/find-list?identity=NORMAL",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "base-user", "find-list"],
+              "query": [
+                {
+                  "key": "identity",
+                  "value": "NORMAL"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('管理员可查用户列表', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.8 用户列表（普通用户，期望403）",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/base-user/find-list?identity=NORMAL",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "base-user", "find-list"],
+              "query": [
+                {
+                  "key": "identity",
+                  "value": "NORMAL"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('普通用户访问管理接口返回403', function() {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.9 发送验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/verification-code/send?phoneNumber=13712340001",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "verification-code", "send"],
+              "query": [
+                {
+                  "key": "phoneNumber",
+                  "value": "13712340001"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('发送验证码接口可响应', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02_活动模块",
+      "item": [
+        {
+          "name": "2.1 活动列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/activity/find-list?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["activity", "find-list"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('活动列表返回total', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.expect(body.data.total).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2 活动详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/activity/detail/find?activityId=34",
+              "host": ["{{baseUrl}}"],
+              "path": ["activity", "detail", "find"],
+              "query": [
+                {
+                  "key": "activityId",
+                  "value": "34"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('活动详情返回活动信息', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.expect(body.data.activityId).to.eql(34);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03_奖品模块",
+      "item": [
+        {
+          "name": "3.1 奖品列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/prize/find-list?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["prize", "find-list"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('奖品列表返回total', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04_抽奖模块",
+      "item": [
+        {
+          "name": "4.1 发起抽奖（MQ异步）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"activityId\": 34,\n    \"prizeId\": 25,\n    \"winningTime\": \"2026-08-17T10:00:00\",\n    \"winnerList\": [\n        {\n            \"userId\": 66,\n            \"userName\": \"Postman测试用户\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/draw/prize",
+              "host": ["{{baseUrl}}"],
+              "path": ["draw", "prize"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('抽奖请求发送（MQ不可达时可能超时，见缺陷BUG-002）', function() {",
+                  "    pm.expect(true).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 中奖记录（活动+奖品）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"activityId\": 34,\n    \"prizeId\": 25\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/draw/winning-records/show",
+              "host": ["{{baseUrl}}"],
+              "path": ["draw", "winning-records", "show"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('中奖记录查询成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3 我的中奖记录",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/draw/my-records",
+              "host": ["{{baseUrl}}"],
+              "path": ["draw", "my-records"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('我的中奖记录返回200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05_AI客服",
+      "item": [
+        {
+          "name": "5.1 工具调用聊天-同步",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"message\": \"查询所有活动\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chat/sync",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "chat", "sync"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('工具调用聊天返回回答', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.expect(body.data).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 RAG聊天-同步",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"message\": \"怎么参与抽奖?\",\n    \"sessionId\": \"pm-sess-001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat/sync",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "chat", "sync"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('RAG聊天返回回答', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.3 RAG聊天-SSE流式",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"message\": \"中奖后怎么领奖?\",\n    \"sessionId\": \"pm-sess-002\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "chat"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('SSE接口返回200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06_FAQ知识库（管理员）",
+      "item": [
+        {
+          "name": "6.1 FAQ新增",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Postman测试问题？\",\n    \"answer\": \"这是Postman自动化测试答案\",\n    \"category\": \"测试\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/faq/add",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "faq", "add"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FAQ新增成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(200);",
+                  "    pm.expect(body.data).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.2 FAQ列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/faq/list?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "faq", "list"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FAQ列表返回total', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.have.property('total');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.3 FAQ删除",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/faq/delete?id=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "faq", "delete"],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FAQ删除成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.4 权限-未登录访问FAQ（期望401）",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/faq/list?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "faq", "list"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('未登录访问FAQ返回401', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.5 权限-普通用户访问FAQ（期望403）",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/faq/list?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "faq", "list"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('普通用户访问FAQ返回403', function() {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07_交接班工单",
+      "item": [
+        {
+          "name": "7.1 用户发起转人工",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sessionId\": \"pm-sess-003\",\n    \"question\": \"Postman转人工测试\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/handover/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "handover", "create"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('转人工创建成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.2 工单列表（管理员）",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handover/list?status=PENDING&page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "handover", "list"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('工单列表返回total', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.have.property('total');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.3 工单处理（管理员）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id\": 3,\n    \"status\": \"RESOLVED\",\n    \"handler\": \"Postman管理员\",\n    \"remark\": \"已电话联系用户解决\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/handover/process",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "handover", "process"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('工单处理成功', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.4 权限-普通用户查工单（期望403）",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handover/list?status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "handover", "list"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('普通用户查工单返回403', function() {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

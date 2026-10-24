@@ -28,3 +28,21 @@ CREATE TABLE IF NOT EXISTS human_handover (
     gmt_modified DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     KEY idx_status (status)
 ) COMMENT='转人工工单表';
+
+-- ===== 框架化 RAG 重构新增:Jdbc 会话记忆表 =====
+-- 由 Spring AI 的 JdbcChatMemoryRepository 使用(表结构取自其官方 schema-mysql.sql)
+-- 用途:把多轮会话持久化到 MySQL,替代/补充原 Redis 手写会话记忆
+CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
+    conversation_id VARCHAR(36) NOT NULL COMMENT '会话ID(对应前端 sessionId)',
+    content         TEXT        NOT NULL COMMENT '消息内容',
+    type            VARCHAR(10) NOT NULL COMMENT '消息类型:USER/ASSISTANT/SYSTEM/TOOL',
+    timestamp       TIMESTAMP   NOT NULL COMMENT '消息时间',
+    CONSTRAINT TYPE_CHECK CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
+) COMMENT='Spring AI Jdbc 会话记忆';
+
+-- 索引:MySQL 不支持 CREATE INDEX IF NOT EXISTS,重复执行前请先确认是否已存在
+CREATE INDEX SPRING_AI_CHAT_MEMORY_IDX
+    ON SPRING_AI_CHAT_MEMORY (conversation_id, timestamp);
+
+-- 清理任务(建议:定时删除 7 天前的会话,避免表无限增长;Jdbc 记忆没有自动过期)
+-- DELETE FROM SPRING_AI_CHAT_MEMORY WHERE timestamp < DATE_SUB(NOW(), INTERVAL 7 DAY);

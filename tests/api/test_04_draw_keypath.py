@@ -6,7 +6,7 @@
 
 ⚠️ 不含 `/draw/prize` 正常流：
   该接口经 RabbitMQ 投递，当前环境 MQ 不可达（8.136.222.102:5672），
-  调用会阻塞约 30s 后超时（缺陷 BUG-002）。依赖异常场景归入第④步处理。
+  调用会阻塞约 30s 后超时（缺陷 BUG-001）。依赖异常场景归入第④步处理。
 
 能抓到的缺陷：
   - 免登录接口泄露手机号/邮箱（PII 越界）
@@ -14,11 +14,14 @@
   - 缺参数时返回 500 而非 400
 """
 import pytest
+import allure
 
 from common import config
 from common.client import assert_code, assert_success, assert_field
 
 
+@allure.feature("抽奖与中奖记录")
+@allure.story("中奖记录查询关键路径")
 @pytest.mark.smoke
 @pytest.mark.keypath
 class TestWinningRecordsKeyPath:
@@ -71,6 +74,8 @@ class TestWinningRecordsKeyPath:
             f"[我的中奖记录-未登录] 期望 HTTP=401，实际 {denied.brief()}")
 
 
+@allure.feature("抽奖与中奖记录")
+@allure.story("公开分享接口契约")
 @pytest.mark.keypath
 class TestPublicShareContract:
     """C-4：中奖名单免登录可查 —— 业主确认「为了可以直接分享抽奖结果」"""
