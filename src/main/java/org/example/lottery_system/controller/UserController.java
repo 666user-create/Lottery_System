@@ -67,6 +67,12 @@ public class UserController {
     private String adminSecretConfig;
     /*
     * 注册
+    *
+    * 安全约定（2026-11-02）：本方法打印了完整入参对象。password 之所以不会泄露，
+    * 是因为 UserRegisterParam.password 上加了 @JsonProperty(WRITE_ONLY) 与
+    * @ToString.Exclude。**新增任何凭证字段时必须同步加注解**，
+    * 否则这一行日志会直接把它写进日志文件（历史上就是这么泄露的）。
+    * 详见 JacksonUtil 类头的「敏感入参脱敏约定」与 SensitiveParamLoggingTest。
     * */
     @PostMapping("/register")
     public CommonResult<UserRegisterResult> userRegister(@Validated @RequestBody UserRegisterParam param,
@@ -132,6 +138,7 @@ public class UserController {
     @PostMapping("/password/login")
     public CommonResult<UserLoginResult> userPasswordLogin(@Validated @RequestBody UserPasswordLoginParam param){
         logger.info("userPasswordLogin param:{}", JacksonUtil.writeValueAsString(param));
+        // 同上：password 不泄露依赖 UserPasswordLoginParam 上的脱敏注解，勿删
         UserLoginDTO userLoginDTO=userService.login(param);
         return CommonResult.success(convertToUserLoginResult(userLoginDTO));
     }
@@ -141,6 +148,7 @@ public class UserController {
     @PostMapping("/message/login")
     public CommonResult<UserLoginResult> shortMessageLogin(@Validated @RequestBody UserShortMessageLoginParam param){
         logger.info("userShortMessageLogin param:{}", JacksonUtil.writeValueAsString(param));
+        // 同上：verificationCode 不泄露依赖该 Param 上的脱敏注解，勿删
         UserLoginDTO userLoginDTO=userService.login(param);
         return CommonResult.success(convertToUserLoginResult(userLoginDTO));
     }
