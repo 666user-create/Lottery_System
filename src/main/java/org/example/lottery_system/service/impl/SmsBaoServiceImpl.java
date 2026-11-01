@@ -5,6 +5,7 @@ import org.example.lottery_system.service.dto.WinnerRecordDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -22,6 +23,7 @@ public class SmsBaoServiceImpl {
     private SmsBaoConfig smsBaoConfig;
 
     @Autowired
+    @Qualifier("smsRestTemplate")   // 短信网关必须用带超时的实例，不能用默认无超时 Bean（见 RestTemplateConfig）
     private RestTemplate restTemplate;
 
     /**

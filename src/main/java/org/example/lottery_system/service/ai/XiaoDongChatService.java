@@ -7,6 +7,7 @@ import org.example.lottery_system.dao.mapper.PrizeMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class XiaoDongChatService {
     private String model;
 
     @Autowired
+    @Qualifier("restTemplate")   // 必须显式限定：容器里有三个 RestTemplate 实例
     private RestTemplate restTemplate;
 
     @Autowired private ActivityMapper activityMapper;

@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -48,7 +49,9 @@ public class AiCustomerService {
     @Value("${ai.memory.expire-seconds:1800}")
     private long expireSeconds;
 
-    @Autowired private RestTemplate restTemplate;
+    @Autowired
+    @Qualifier("restTemplate")   // 必须显式限定：容器里已有 restTemplate / embeddingRestTemplate / smsRestTemplate 三个实例
+    private RestTemplate restTemplate;
     /** 手动埋点用:Zipkin / Brave 的观测注册表,Boot 已自动装配 */
     @Autowired private ObservationRegistry observationRegistry;
     @Autowired private RedisUtil redisUtil;

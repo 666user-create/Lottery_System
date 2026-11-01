@@ -15,6 +15,8 @@ import org.example.lottery_system.service.enums.WinningClaimStatusEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -39,6 +41,10 @@ public class ClaimServiceImpl implements ClaimService {
     @Autowired private HumanHandoverMapper handoverMapper;
     @Autowired private QQEmailService qqEmailService;
     @Autowired private SmsBaoServiceImpl smsBaoService;
+    /** 发货通知用的线程池：与中奖通知共用 asyncServiceExecutor（显式限定，避免多候选歧义） */
+    @Autowired
+    @Qualifier("asyncServiceExecutor")
+    private ThreadPoolTaskExecutor asyncNotifyExecutor;
 
     @Override
     public Long claim(Long userId, Long recordId, String receiverName,
@@ -255,7 +261,7 @@ public class ClaimServiceImpl implements ClaimService {
         return record;
     }
 
-    /** 发货通知:邮件 + 短信,失败只记日志(不影响发货结果) */
+    /** 发货通知:邮件 + 短信,异步执行且失败只记日志(绝不影响发货结果,也不阻塞发货接口) */
     private void notifyShipped(Long recordId, String shippingCompany, String shippingNo) {
         WinningRecordDO record = winningRecordMapper.selectById(recordId);
         if (record == null) {
@@ -263,17 +269,35 @@ public class ClaimServiceImpl implements ClaimService {
         }
         String content = String.format("好消息!您在「%s」活动中获得的奖品「%s」已发货,承运:%s,单号:%s,请注意查收。",
                 record.getActivityName(), record.getPrizeName(), shippingCompany, shippingNo);
+
+        /*
+         * 必须异步：本方法原先同步执行，跑在 HTTP 请求线程上。
+         * 邮件（QQ SMTP）与短信（短信宝 HTTP）都是外部依赖，
+         * 即便加了超时（smsRestTemplate 5s），最坏也会让「登记发货」接口多等好几秒；
+         * 若没有超时则会无限挂起——try/catch 捕获得了异常，捕获不了线程阻塞。
+         * 发货状态此时已经落库成功，通知是纯粹的附带动作，没有理由阻塞接口返回。
+         * 复用 asyncServiceExecutor（与中奖通知同一个池，10/20/20），
+         * 线程池满时由 @Async 提交阶段抛 TaskRejectedException——这里再兜一层，
+         * 保证无论池满还是发送失败，都不会反向影响发货结果。
+         */
         try {
-            qqEmailService.sendSimpleMail(record.getWinnerEmail(), "【抽奖系统】您的奖品已发货", content);
+            asyncNotifyExecutor.execute(() -> {
+                try {
+                    qqEmailService.sendSimpleMail(record.getWinnerEmail(), "【抽奖系统】您的奖品已发货", content);
+                } catch (Exception e) {
+                    log.warn("发货邮件通知失败(不影响发货): {}", e.getMessage());
+                }
+                try {
+                    if (record.getWinnerPhoneNumber() != null) {
+                        smsBaoService.sendCustomNotification(record.getWinnerPhoneNumber().getValue(), content);
+                    }
+                } catch (Exception e) {
+                    log.warn("发货短信通知失败(不影响发货): {}", e.getMessage());
+                }
+            });
         } catch (Exception e) {
-            log.warn("发货邮件通知失败(不影响发货): {}", e.getMessage());
-        }
-        try {
-            if (record.getWinnerPhoneNumber() != null) {
-                smsBaoService.sendCustomNotification(record.getWinnerPhoneNumber().getValue(), content);
-            }
-        } catch (Exception e) {
-            log.warn("发货短信通知失败(不影响发货): {}", e.getMessage());
+            // 线程池满/已关闭：丢弃通知但保留审计痕迹，发货结果不受影响
+            log.warn("发货通知入队失败(不影响发货) recordId={}: {}", recordId, e.getMessage());
         }
     }
 
