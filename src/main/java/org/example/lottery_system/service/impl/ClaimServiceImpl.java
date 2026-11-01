@@ -10,6 +10,7 @@ import org.example.lottery_system.dao.mapper.HumanHandoverMapper;
 import org.example.lottery_system.dao.mapper.UserMapper;
 import org.example.lottery_system.dao.mapper.WinningRecordMapper;
 import org.example.lottery_system.service.ClaimService;
+import org.example.lottery_system.service.DrawPrizeService;
 import org.example.lottery_system.service.QQEmailService;
 import org.example.lottery_system.service.enums.WinningClaimStatusEnum;
 import org.slf4j.Logger;
@@ -41,6 +42,11 @@ public class ClaimServiceImpl implements ClaimService {
     @Autowired private HumanHandoverMapper handoverMapper;
     @Autowired private QQEmailService qqEmailService;
     @Autowired private SmsBaoServiceImpl smsBaoService;
+    /**
+     * 用于履约状态变更后清除中奖名单缓存（2026-11-02 修复）。
+     * 公示接口 /draw/winning-records/show 优先读 Redis，若不清理会长期展示旧状态。
+     */
+    @Autowired private DrawPrizeService drawPrizeService;
     /** 发货通知用的线程池：与中奖通知共用 asyncServiceExecutor（显式限定，避免多候选歧义） */
     @Autowired
     @Qualifier("asyncServiceExecutor")
@@ -101,17 +107,21 @@ public class ClaimServiceImpl implements ClaimService {
             throw new ServiceException(ServiceErrorCodeConstants.CLAIM_STATUS_INVALID);
         }
         log.info("用户[{}]申请领奖成功: 中奖记录[{}] 工单[{}]", userId, recordId, ticket.getId());
+        // 状态已从 NOT_CLAIMED 变为 CLAIMED，公示缓存必须失效，否则公示页仍显示"未领取"
+        evictCacheQuietly(record.getActivityId(), recordId);
         return ticket.getId();
     }
 
     @Override
     public boolean confirmReceived(Long userId, Long recordId) {
-        requireOwnedRecord(userId, recordId);
+        WinningRecordDO record = requireOwnedRecord(userId, recordId);
         int updated = winningRecordMapper.completeIfShipped(recordId);
         if (updated == 0) {
             throw new ServiceException(ServiceErrorCodeConstants.CLAIM_NOT_SHIPPED);
         }
         log.info("用户[{}]确认收货: 中奖记录[{}]", userId, recordId);
+        // 已发货 → 已签收，公示缓存失效
+        evictCacheQuietly(record.getActivityId(), recordId);
         return true;
     }
 
@@ -144,6 +154,8 @@ public class ClaimServiceImpl implements ClaimService {
 
         notifyShipped(ticket.getRefId(), shippingCompany.trim(), shippingNo.trim());
         log.info("工单[{}]登记发货: 中奖记录[{}] {} 单号 {}", ticketId, ticket.getRefId(), shippingCompany, shippingNo);
+        // 已申请 → 已发货，公示缓存必须失效（实测缺陷：不清理会让公示页长期显示"未领取"）
+        evictCacheQuietly(ticket.getRefId());
         return true;
     }
 
@@ -164,6 +176,10 @@ public class ClaimServiceImpl implements ClaimService {
         update.setRemark(StringUtils.hasText(remark) ? remark.trim() : "取消领奖申请");
         handoverMapper.updateStatus(update);
         log.info("工单[{}]已取消领奖,中奖记录[{}]状态回退为未领取", ticketId, ticket.getRefId());
+        // CLAIMED → NOT_CLAIMED（回退），公示缓存失效
+        if (ticket.getRefId() != null) {
+            evictCacheQuietly(ticket.getRefId());
+        }
         return true;
     }
 
@@ -180,6 +196,10 @@ public class ClaimServiceImpl implements ClaimService {
         }
         handoverMapper.deleteById(ticketId);
         log.info("工单[{}](类型 {})已删除", ticketId, ticket.getType());
+        // 删工单可能把记录回退成未领取，公示缓存失效
+        if (HumanHandoverDO.TYPE_CLAIM.equals(ticket.getType()) && ticket.getRefId() != null) {
+            evictCacheQuietly(ticket.getRefId());
+        }
         return true;
     }
 
@@ -241,10 +261,40 @@ public class ClaimServiceImpl implements ClaimService {
         if (WinningClaimStatusEnum.SHIPPED.name().equals(claimStatus)) {
             notifyShipped(recordId, shippingCompany.trim(), shippingNo.trim());
         }
+        // 覆盖式改状态（含撤销发货/签收等回退），公示缓存一律失效
+        evictCacheQuietly(current.getActivityId(), recordId);
         return true;
     }
 
     // ==================== 内部方法 ====================
+
+    /**
+     * 清除中奖名单缓存，失败只记 WARN 不影响主业务（2026-11-02 新增）。
+     *
+     * <p>为什么不抛异常：缓存清除是「让公示信息及时更新」的优化动作，
+     * 即使 Redis 挂了、清缓存失败，领奖/发货这些核心业务的正确性不受影响。
+     * 绝不能因为缓存清理失败而回滚已经成功的状态推进。
+     */
+    private void evictCacheQuietly(Long activityId, Long recordId) {
+        try {
+            drawPrizeService.evictWinningRecordsCache(activityId, recordId);
+        } catch (Exception e) {
+            log.warn("清除中奖名单缓存失败(不影响履约): activityId={}, recordId={}, {}",
+                    activityId, recordId, e.getMessage());
+        }
+    }
+
+    /** 重载：只给 recordId 时，自己反查 activityId（工单类入口只有 refId，没有活动信息） */
+    private void evictCacheQuietly(Long recordId) {
+        try {
+            WinningRecordDO record = winningRecordMapper.selectById(recordId);
+            if (record != null) {
+                evictCacheQuietly(record.getActivityId(), recordId);
+            }
+        } catch (Exception e) {
+            log.warn("清除中奖名单缓存失败(不影响履约): recordId={}, {}", recordId, e.getMessage());
+        }
+    }
 
     /** 取中奖记录并校验归属(防越权操作他人中奖记录) */
     private WinningRecordDO requireOwnedRecord(Long userId, Long recordId) {

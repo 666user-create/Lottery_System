@@ -223,6 +223,29 @@ public class DrawPrizeServiceImpl implements DrawPrizeService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public void evictWinningRecordsCache(Long activityId, Long recordId) {
+        if (activityId == null) {
+            logger.error("清除中奖名单缓存失败,活动id为空");
+            return;
+        }
+        // 活动维度总是要清（公示接口按 activityId 查时会命中这个键）
+        deleteWinningRecords(String.valueOf(activityId));
+
+        // 奖品维度按键是 activityId_prizeId，需要先从记录反查 prizeId 才知道要清哪个键。
+        // 查不到 prizeId 时只清活动维度即可：奖品维度缓存同样有过期时间，
+        // 且下一次开奖/重建时会覆盖，属于可接受的短暂不一致。
+        if (recordId != null) {
+            WinningRecordDO recordDO = winningRecordMapper.selectById(recordId);
+            if (recordDO != null && recordDO.getPrizeId() != null) {
+                deleteWinningRecords(activityId + "_" + recordDO.getPrizeId());
+            } else {
+                logger.warn("清除奖品维度中奖缓存跳过: recordId={} 查不到 prizeId", recordId);
+            }
+        }
+        logger.info("已清除中奖名单缓存: activityId={}, recordId={}", activityId, recordId);
+    }
+
     private void deleteWinningRecords(String key) {
         try {
             if (redisUtil.hasKey(WINNING_RECORDS_PREFIX + key)) {
