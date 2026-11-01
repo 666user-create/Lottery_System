@@ -29,7 +29,26 @@ import static org.example.lottery_system.common.config.DirectRabbitConfig.ROUTIN
 
 @Service
 public class DrawPrizeServiceImpl implements DrawPrizeService {
-    private static final Long WINNING_RECORDS_TIMEOUT = 60 * 60 * 24 * 7L;
+    /*
+     * 中奖名单缓存 TTL：45 分钟（原 7 天，2026-11-02 调整）。
+     *
+     * 为什么从 7 天降到 45 分钟：TTL 在这里不是「缓存有效期」，而是
+     * Cache-Aside 时序竞态的**兜底上限**——
+     *   线程A(读) 查库读到旧值 → 线程B(写) UPDATE + DEL 缓存 → 线程A 回填旧值
+     * 此时缓存里是脏数据，主动失效（evictWinningRecordsCache）管不到它，
+     * 只能等 TTL 到期自然过期后重新回源。
+     * 7 天的兜底窗口过长：一旦触发，公示状态可能错几天。
+     *
+     * 为什么是 45 分钟而不是更短：本接口 /draw/winning-records/show 是免登录
+     * 公开接口，缓存过短会让匿名刷请求直接打到 MySQL；45 分钟在
+     * 「脏数据自愈速度」与「抗公开接口刷库」之间取折中。
+     *
+     * 注意：正常一致性靠「领奖/发货/签收时主动清缓存」保证（见
+     * ClaimServiceImpl#evictCacheQuietly），TTL 只处理主动失效失效的极端情况。
+     *
+     * 单位：秒（RedisUtil#set 用 TimeUnit.SECONDS）；45*60 = 2700 秒。
+     */
+    private static final Long WINNING_RECORDS_TIMEOUT = 45 * 60L;
     private static final String WINNING_RECORDS_PREFIX = "WINNING_RECORDS_";
     private static Logger logger = LoggerFactory.getLogger(DrawPrizeServiceImpl.class);
     @Autowired
