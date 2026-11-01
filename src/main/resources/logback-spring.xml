@@ -4,7 +4,8 @@
         <!--输出到控制台-->
         <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n%ex</pattern>
+                <!-- [%X{traceId:-}] 打印链路追踪 ID；无 trace 上下文时为空，不影响启动期日志 -->
+                <pattern>%d{HH:mm:ss} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n%ex</pattern>
             </encoder>
         </appender>
         <root level="info">
@@ -39,7 +40,7 @@
             <!--日志输出编码格式化-->
             <encoder>
                 <charset>UTF-8</charset>
-                <pattern>%d [%thread] %-5level %logger{36} %line - %msg%n%ex</pattern>
+                <pattern>%d [%thread] [%X{traceId:-}] %-5level %logger{36} %line - %msg%n%ex</pattern>
             </encoder>
         </appender>
 
@@ -47,7 +48,7 @@
         <appender name="fileInfoLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <File>${logback.logInfoDir}/info.log</File>
             <!--自定义过滤器,保证info.***.log中只打印INFO级别的日志, 填写全限定路径-->
-            <filter class="org.example.lottery_system.common.filter"/>
+            <filter class="org.example.lottery_system.common.filter.InfoLevelFilter"/>
             <!--滚动策略,按照时间滚动 TimeBasedRollingPolicy-->
             <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
                 <FileNamePattern>${logback.logInfoDir}/info.%d{yyyy-MM-dd}.log</FileNamePattern>
@@ -59,7 +60,7 @@
             <!--日志输出编码格式化-->
             <encoder>
                 <charset>UTF-8</charset>
-                <pattern>%d [%thread] %-5level %logger{36} %line - %msg%n%ex</pattern>
+                <pattern>%d [%thread] [%X{traceId:-}] %-5level %logger{36} %line - %msg%n%ex</pattern>
             </encoder>
         </appender>
         <root level="info">

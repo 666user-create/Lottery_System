@@ -1,7 +1,9 @@
 package org.example.lottery_system.controller.param;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * 修改邮箱/密码的验证信息。
@@ -29,12 +31,22 @@ public class AccountVerifyParam {
     @NotBlank(message = "验证方式不能为空")
     private String verifyType;
 
+    /*
+     * 以下三个字段都是「一次性凭证」，一律只收不发：
+     * 反序列化照常接收（校验需要），但序列化/日志中绝不出现。
+     * */
     /** verifyType=password 时必填 */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
     private String oldPassword;
 
     /** verifyType=code 时必填 */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
     private String verificationCode;
 
     /** verifyType=secret 时必填（仅管理员可用） */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
     private String adminSecret;
 }

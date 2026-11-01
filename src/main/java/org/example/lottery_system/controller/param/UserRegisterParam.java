@@ -1,8 +1,10 @@
 package org.example.lottery_system.controller.param;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.ToString;
 
 @Data
 public class UserRegisterParam {
@@ -28,8 +30,15 @@ public class UserRegisterParam {
     private String phoneNumber;
     /*
      * 密码
+     *
+     * 安全：@JsonProperty(access = WRITE_ONLY) 表示「只反序列化、不序列化」——
+     * 客户端提交的密码照常能收进来，但 writeValueAsString(param) 打日志时该字段被排除。
+     * @ToString.Exclude 同时挡住 controller 里 logger.info("...:{}", param) 这种隐式 toString。
+     * 两者都要，因为项目里两种打印方式都存在（见 UserController 与 DrawPrizeController）。
      * */
     @Size(max = 255, message = "密码长度不能超过255")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
     private String password;
 
     /*
