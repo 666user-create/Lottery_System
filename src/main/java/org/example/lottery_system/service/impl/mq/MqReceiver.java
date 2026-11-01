@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitHandler;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -44,64 +43,97 @@ public class MqReceiver {
     @Autowired
     private SMSService smsService;
     @Autowired
-    private ThreadPoolTaskExecutor asyncServiceExecutor;
-    @Autowired
     private ActivityPrizeMapper activityPrizeMapper;
     @Autowired
     private WinningRecordMapper winningRecordMapper;
     private static final Logger logger = LoggerFactory.getLogger(MqReceiver.class);
+
     @RabbitHandler
-    public void process(Map<String,String> message){
-        //成功接受队列消息
+    public void process(Map<String, String> message) {
         logger.info("mq消息成功接收:{}", JacksonUtil.writeValueAsString(message));
-        
-            try {
-                String paramString = message.get("messageData");
-                DrawPrizeParam param = JacksonUtil.readValue(paramString, DrawPrizeParam.class);
-                //处理抽奖流程
-                try {
-                    //检验抽奖请求是否有效
-                    if (!drawPrizeService.checkDrawPrizeParam(param)) {
-                        logger.warn("抽奖请求校验未通过:{}", JacksonUtil.writeValueAsString(param));
-                        return;
-                    }
-                    //状态扭转处理
-                    statusConvert(param);
-                    //保存中奖者名单
-                    List<WinningRecordDO> winningRecordDOList = drawPrizeService.saveWinnerRecords(param);
-                    //通知中奖者(邮箱)
-                    if (winningRecordDOList != null && !winningRecordDOList.isEmpty()) {
-                    List<WinnerRecordDTO> winnerRecordDTOList = winningRecordDOList.stream().map(doItem -> {
-                        WinnerRecordDTO dto = new WinnerRecordDTO();
-                        dto.setWinnerName(doItem.getWinnerName());
-                        dto.setWinnerEmail(doItem.getWinnerEmail());
-                        dto.setActivityName(doItem.getActivityName());
-                        dto.setPrizeTier(doItem.getPrizeTier());
-                        dto.setPrizeName(doItem.getPrizeName());
-                        if (doItem.getWinnerPhoneNumber() != null) {
-                            Map<String, String> phoneMap = new HashMap<>();
-                            phoneMap.put("value", doItem.getWinnerPhoneNumber().getValue());
-                            dto.setWinnerPhoneNumber(phoneMap);
-                        }
-                        return dto;
-                    }).collect(Collectors.toList());
-                    //通知中奖者(邮箱)
-                    qqEmailService.notifyWinners(winnerRecordDTOList);
-                    //通知中奖者(短信) - 并发异步发送
-                    for (WinnerRecordDTO winner : winnerRecordDTOList) {
-                        smsService.sendSmsAsync(winner);
-                    }
-                }
-            } catch (ServiceException e) {
-                //发生异常,需要保证事务一致性(回滚),抛出异常
-                logger.error("mq消息处理异常:{} :{}", e.getCode(), e.getMessage(), e);
-                rollback(param);
-            } catch (Exception e) {
-                logger.error("mq消息处理异常", e);
-                rollback(param);
-            }
+
+        // ===== 第 1 段：只做消息解析，消息本身坏了直接放弃（重试无意义）=====
+        DrawPrizeParam param;
+        try {
+            param = JacksonUtil.readValue(message.get("messageData"), DrawPrizeParam.class);
         } catch (Exception e) {
-            logger.error("mq消息处理异常: 消息读取或处理失败", e);
+            logger.error("mq消息处理异常: 消息读取失败", e);
+            return;
+        }
+
+        // ===== 第 2 段：核心流程（校验 + 状态扭转 + 落中奖名单），只有这一段失败才回滚 =====
+        List<WinningRecordDO> winningRecordDOList;
+        try {
+            if (!drawPrizeService.checkDrawPrizeParam(param)) {
+                logger.warn("抽奖请求校验未通过:{}", JacksonUtil.writeValueAsString(param));
+                return;
+            }
+            statusConvert(param);
+            winningRecordDOList = drawPrizeService.saveWinnerRecords(param);
+        } catch (ServiceException e) {
+            logger.error("mq消息处理异常:{} :{}", e.getCode(), e.getMessage(), e);
+            safeRollback(param);
+            return;
+        } catch (Exception e) {
+            logger.error("mq消息处理异常", e);
+            safeRollback(param);
+            return;
+        }
+
+        // ===== 第 3 段：通知属于附带动作，失败绝不能影响开奖结果 =====
+        notifyWinnersQuietly(winningRecordDOList);
+    }
+
+    /**
+     * 通知中奖者（邮件 + 短信），逐条兜底。
+     *
+     * <p>为什么不能把通知放进第 2 段的 try：{@code @Async} 的线程池拒绝是「提交阶段同步抛异常」，
+     * 池满时 TaskRejectedException 会一路抛到 MQ 消费线程；若与核心流程共用一个 catch，
+     * 就会把「短信没发出去」升级成「回滚开奖、删除中奖记录」。
+     * 通知是可重试/可降级的附带动作，因此这里全部吞掉，只记 WARN。
+     */
+    private void notifyWinnersQuietly(List<WinningRecordDO> winningRecordDOList) {
+        if (winningRecordDOList == null || winningRecordDOList.isEmpty()) {
+            return;
+        }
+        List<WinnerRecordDTO> winnerRecordDTOList = winningRecordDOList.stream().map(doItem -> {
+            WinnerRecordDTO dto = new WinnerRecordDTO();
+            dto.setWinnerName(doItem.getWinnerName());
+            dto.setWinnerEmail(doItem.getWinnerEmail());
+            dto.setActivityName(doItem.getActivityName());
+            dto.setPrizeTier(doItem.getPrizeTier());
+            dto.setPrizeName(doItem.getPrizeName());
+            if (doItem.getWinnerPhoneNumber() != null) {
+                Map<String, String> phoneMap = new HashMap<>();
+                phoneMap.put("value", doItem.getWinnerPhoneNumber().getValue());
+                dto.setWinnerPhoneNumber(phoneMap);
+            }
+            return dto;
+        }).collect(Collectors.toList());
+
+        try {
+            qqEmailService.notifyWinners(winnerRecordDTOList);
+        } catch (Exception e) {
+            logger.warn("中奖邮件通知失败(不影响开奖结果): {}", e.getMessage());
+        }
+        for (WinnerRecordDTO winner : winnerRecordDTOList) {
+            try {
+                smsService.sendSmsAsync(winner);
+            } catch (Exception e) {
+                // 线程池满 → AbortPolicy 抛 TaskRejectedException，会走到这里
+                logger.warn("中奖短信入队失败(不影响开奖结果) user={}: {}",
+                        winner.getWinnerName(), e.getMessage());
+            }
+        }
+    }
+
+    /** 回滚本身再失败就必须人工介入，单独兜底，避免把原始异常冲掉 */
+    private void safeRollback(DrawPrizeParam param) {
+        try {
+            rollback(param);
+        } catch (Exception e) {
+            logger.error("回滚失败，需人工核查: activityId={}, prizeId={}",
+                    param.getActivityId(), param.getPrizeId(), e);
         }
     }
 

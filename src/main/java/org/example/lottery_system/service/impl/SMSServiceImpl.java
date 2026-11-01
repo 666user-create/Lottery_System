@@ -37,7 +37,7 @@ public class SMSServiceImpl implements SMSService {
     /**
      * 实现异步发送：标记为 @Async，Spring 会在后台线程池中运行此方法
      */
-    @Async
+    @Async("asyncServiceExecutor")   // 显式点名执行器：容器里有 3 个 TaskExecutor 候选，不点名会回落到 SimpleAsyncTaskExecutor
     @Override
     public void sendSmsAsync(WinnerRecordDTO winner) {
         try {
