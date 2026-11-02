@@ -55,6 +55,8 @@ public class ExecutorConfig {
         executor.setQueueCapacity(QUEUE_CAPACITY);
         executor.setKeepAliveSeconds(KEEP_ALIVE_SECONDS);
         executor.setThreadNamePrefix(THREAD_NAME_PREFIX);
+        // 把提交线程的 MDC（traceId）带到异步线程，否则短信日志的 traceId 方括号为空
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;

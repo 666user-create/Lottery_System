@@ -32,6 +32,8 @@ public class OperationLogConfig {
         executor.setQueueCapacity(500);
         executor.setKeepAliveSeconds(60);
         executor.setThreadNamePrefix("operation-log-");
+        // 把请求线程的 MDC（traceId）带到日志落库线程，便于按 traceId 追查日志写入
+        executor.setTaskDecorator(new MdcTaskDecorator());
         //队列满时由调用方（HTTP 请求线程）自己执行这条 insert，绝不丢日志
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
