@@ -11,7 +11,15 @@ import java.util.concurrent.ThreadPoolExecutor;
 *
 * 刻意与 asyncServiceExecutor（中奖通知的邮件/短信）分开：
 * 1.日志写入再慢也不会挤占业务通知的线程；
-* 2.采用 AbortPolicy + 调用方显式捕获，队列满时丢弃日志而不是阻塞请求线程。
+* 2.队列满时由 CallerRunsPolicy 兜住（2026-11-02 由 AbortPolicy 改）。
+*
+* 为什么这里用 CallerRunsPolicy（代价极低、收益明确）：
+*   - 提交线程是 HTTP 请求线程，被拒绝的任务体只是一条 MySQL insert（毫秒级），
+*     由请求线程顺带执行，代价仅几毫秒；
+*   - 换来的是「审计日志不再静默丢失」——AbortPolicy 下被拒日志直接消失，
+*     而操作日志的价值恰恰在于完整。
+* 唯一风险：MySQL 不可用时 insert 会卡住请求线程；但那种场景下所有请求本来就失败，
+* 不构成额外损失。若将来日志落库变重（如写 ES/远程服务），应重新评估此策略。
 * */
 @Configuration
 public class OperationLogConfig {
@@ -24,8 +32,8 @@ public class OperationLogConfig {
         executor.setQueueCapacity(500);
         executor.setKeepAliveSeconds(60);
         executor.setThreadNamePrefix("operation-log-");
-        //队列满时直接拒绝，由调用方捕获并丢弃，绝不阻塞 HTTP 请求线程
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        //队列满时由调用方（HTTP 请求线程）自己执行这条 insert，绝不丢日志
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

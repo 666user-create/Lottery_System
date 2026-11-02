@@ -30,7 +30,7 @@ import java.util.Set;
 *   读 body 会把图片缓冲进内存；二是注册参数含 password/手机号/邮箱，
 *   这些字段在库里是加密存储的，落明文等于绕过加密；
 * 3.业务成功/失败由 OperationLogResponseAdvice 通过 request attribute 传递过来；
-* 4.落库走专用线程池，队列满时丢弃日志，绝不阻塞请求线程；
+* 4.落库走专用线程池；队列满时由 CallerRunsPolicy 交给请求线程顺带执行（毫秒级），既不丢日志也不抛异常；
 * 5.本拦截器必须注册在 LoginInterceptor 之前，这样被 401/403 拒绝的请求也能留下记录。
 * */
 @Component
@@ -201,13 +201,21 @@ public class OperationLogInterceptor implements HandlerInterceptor {
     }
 
     /*
-     * 提交到专用线程池。队列满时丢弃日志并告警，绝不把异常抛回请求线程。
+     * 提交到专用线程池。
+     *
+     * 拒绝策略已改为 CallerRunsPolicy（2026-11-02）：队列满时不再抛异常，
+     * 而是由当前 HTTP 请求线程顺带执行这条 insert（毫秒级，可忽略）。
+     * 因此正常情况下不会走到 catch —— 日志不再静默丢失。
+     *
+     * 保留 try/catch 是为了兜住其它提交失败场景（线程池已关闭、
+     * ThreadPoolTaskExecutor 包装出的其它异常），绝不会让日志问题冒泡到业务。
      * */
     private void submit(OperationLogDO operationLogDO) {
         try {
             operationLogExecutor.execute(() -> operationLogService.save(operationLogDO));
         } catch (TaskRejectedException e) {
-            logger.warn("操作日志队列已满，丢弃本条记录: {} {}",
+            // CallerRunsPolicy 不抛此异常；走到这里说明池已关闭或策略被改回 Abort
+            logger.warn("操作日志提交被拒绝，丢弃本条记录: {} {}（若持续出现请检查拒绝策略是否被改动）",
                     operationLogDO.getHttpMethod(), operationLogDO.getPath());
         } catch (Exception e) {
             logger.warn("操作日志提交失败，已忽略: {}", e.getMessage());

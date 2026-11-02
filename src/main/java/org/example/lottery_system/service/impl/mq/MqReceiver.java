@@ -87,10 +87,15 @@ public class MqReceiver {
     /**
      * 通知中奖者（邮件 + 短信），逐条兜底。
      *
-     * <p>为什么不能把通知放进第 2 段的 try：{@code @Async} 的线程池拒绝是「提交阶段同步抛异常」，
-     * 池满时 TaskRejectedException 会一路抛到 MQ 消费线程；若与核心流程共用一个 catch，
+     * <p>为什么不能把通知放进第 2 段的 try：{@code @Async} 的提交失败（如线程池已关闭、
+     * 或拒绝策略被改回抛异常的那种）会一路抛到 MQ 消费线程；若与核心流程共用一个 catch，
      * 就会把「短信没发出去」升级成「回滚开奖、删除中奖记录」。
-     * 通知是可重试/可降级的附带动作，因此这里全部吞掉，只记 WARN。
+     * 通知是可降级的附带动作，因此这里全部吞掉，只记 WARN。
+     *
+     * <p>注意当前拒绝策略是 CallerRunsPolicy（见 ExecutorConfig）：
+     * 池满时不会抛异常，而是由本消费线程顺带执行短信（当前短信宝为 Mock 化通道、
+     * 失败快，几十条通知的额外耗时可接受）。因此下面的 catch 属防御性代码，
+     * 主要用于兜住「池已关闭」等场景。
      */
     private void notifyWinnersQuietly(List<WinningRecordDO> winningRecordDOList) {
         if (winningRecordDOList == null || winningRecordDOList.isEmpty()) {
@@ -120,8 +125,8 @@ public class MqReceiver {
             try {
                 smsService.sendSmsAsync(winner);
             } catch (Exception e) {
-                // 线程池满 → AbortPolicy 抛 TaskRejectedException，会走到这里
-                logger.warn("中奖短信入队失败(不影响开奖结果) user={}: {}",
+                // 防御性兜底：CallerRunsPolicy 不抛异常，此处主要覆盖「池已关闭」等提交失败场景
+                logger.warn("中奖短信提交失败(不影响开奖结果) user={}: {}",
                         winner.getWinnerName(), e.getMessage());
             }
         }

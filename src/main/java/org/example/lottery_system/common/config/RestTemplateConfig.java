@@ -53,12 +53,14 @@ public class RestTemplateConfig {
      *
      * <p>影响面（两处调用，风险不同）:
      * <ul>
-     *   <li>{@code ClaimServiceImpl#notifyShipped} —— 同步调用,跑在 HTTP 请求线程上。
+     *   <li>{@code ClaimServiceImpl#notifyShipped} —— 修复前同步调用,跑在 HTTP 请求线程上。
      *       try/catch 只能捕获抛出的异常,**捕获不了线程挂起**;
-     *       后果是管理员点「登记发货」后接口长时间不返回。</li>
+     *       后果是管理员点「登记发货」后接口长时间不返回。（现已改为异步提交）</li>
      *   <li>{@code SMSServiceImpl#sendSmsAsync} —— 跑在 asyncServiceExecutor 池里,
-     *       不阻塞请求线程,但会长期占住池内线程(核心仅 10 个)。
-     *       配合 queue=20 + AbortPolicy,少量慢请求就能让后续通知被大面积拒绝。</li>
+     *       不阻塞请求线程,但会给池内线程带来最长 5 秒的占用。
+     *       该池已于 2026-11-02 由 AbortPolicy 改为 CallerRunsPolicy:
+     *       池满时改由 MQ 消费线程顺带执行,慢短信会拖慢队列消费（当前短信宝为
+     *       Mock 化通道、失败快,代价可接受；若将来正式接入需重新评估）。</li>
      * </ul>
      *
      * <p>取值理由:短信宝是轻量 GET,正常 1 秒内返回;给 3 秒连接 + 5 秒读取,

@@ -326,9 +326,12 @@ public class ClaimServiceImpl implements ClaimService {
          * 即便加了超时（smsRestTemplate 5s），最坏也会让「登记发货」接口多等好几秒；
          * 若没有超时则会无限挂起——try/catch 捕获得了异常，捕获不了线程阻塞。
          * 发货状态此时已经落库成功，通知是纯粹的附带动作，没有理由阻塞接口返回。
-         * 复用 asyncServiceExecutor（与中奖通知同一个池，10/20/20），
-         * 线程池满时由 @Async 提交阶段抛 TaskRejectedException——这里再兜一层，
-         * 保证无论池满还是发送失败，都不会反向影响发货结果。
+         *
+         * 复用 asyncServiceExecutor（与中奖通知同一个池，10/20/20）。
+         * 注意该池当前是 CallerRunsPolicy（2026-11-02 起）：池满时不会抛异常，
+         * 而是由本请求线程顺带执行通知（短信宝为 Mock 化通道、失败快，代价可接受）。
+         * 外层 try/catch 因此属防御性代码，主要覆盖「池已关闭」等提交失败场景，
+         * 保证任何通知异常都不会反向影响发货结果。
          */
         try {
             asyncNotifyExecutor.execute(() -> {
