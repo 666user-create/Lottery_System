@@ -50,14 +50,29 @@ public class MqReceiver {
 
     @RabbitHandler
     public void process(Map<String, String> message) {
-        logger.info("mq消息成功接收:{}", JacksonUtil.writeValueAsString(message));
+        /*
+         * 关键：把 messageId 单独提到日志开头（2026-11-02 新增）。
+         *
+         * 背景：生产者 DrawPrizeServiceImpl#drawPrize 已经为每条消息生成了
+         * UUID 形式的 messageId 并打在日志里（"mq消息发送成功:{messageId=..., ...}"），
+         * 但消费端此前只打印整条 message，messageId 淹没在 JSON 里、且无法与生产端对齐。
+         * 而 MQ 消息不携带链路上下文（未配置 AMQP 观测传播），消费线程 MDC 里没有 traceId，
+         * 导致"这次开奖到底被消费了没有"只能靠人肉比对时间戳。
+         *
+         * 现在两端日志都能按同一个 messageId 检索，例如：
+         *   生产: mq消息发送成功:{messageId=75bbd49a-..., ...}
+         *   消费: mq消息接收 messageId=75bbd49a-...
+         * 后续 catch 分支的日志也带上它，失败时便于回溯到具体请求。
+         */
+        final String messageId = message.get("messageId");
+        logger.info("mq消息接收 messageId={} 内容:{}", messageId, JacksonUtil.writeValueAsString(message));
 
         // ===== 第 1 段：只做消息解析，消息本身坏了直接放弃（重试无意义）=====
         DrawPrizeParam param;
         try {
             param = JacksonUtil.readValue(message.get("messageData"), DrawPrizeParam.class);
         } catch (Exception e) {
-            logger.error("mq消息处理异常: 消息读取失败", e);
+            logger.error("mq消息处理异常: 消息读取失败 messageId={}", messageId, e);
             return;
         }
 
@@ -65,17 +80,17 @@ public class MqReceiver {
         List<WinningRecordDO> winningRecordDOList;
         try {
             if (!drawPrizeService.checkDrawPrizeParam(param)) {
-                logger.warn("抽奖请求校验未通过:{}", JacksonUtil.writeValueAsString(param));
+                logger.warn("抽奖请求校验未通过 messageId={} param:{}", messageId, JacksonUtil.writeValueAsString(param));
                 return;
             }
             statusConvert(param);
             winningRecordDOList = drawPrizeService.saveWinnerRecords(param);
         } catch (ServiceException e) {
-            logger.error("mq消息处理异常:{} :{}", e.getCode(), e.getMessage(), e);
+            logger.error("mq消息处理异常 messageId={} code={} msg={}", messageId, e.getCode(), e.getMessage(), e);
             safeRollback(param);
             return;
         } catch (Exception e) {
-            logger.error("mq消息处理异常", e);
+            logger.error("mq消息处理异常 messageId={}", messageId, e);
             safeRollback(param);
             return;
         }
