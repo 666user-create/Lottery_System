@@ -28,6 +28,8 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private org.example.lottery_system.service.TokenRevocationService tokenRevocationService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -43,7 +45,7 @@ public class LoginInterceptor implements HandlerInterceptor {
         try {
             Claims claims = JWTUtil.parseJWT(token);
             if (claims == null) {
-                writeJson(response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                         GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
                 return false;
             }
@@ -62,15 +64,35 @@ public class LoginInterceptor implements HandlerInterceptor {
             Long userId = JWTUtil.getUserId(claims);   // 统一走工具方法：Number→longValue，杜绝窄化溢出
             UserDO currentUser = null;
             if (userId != null) {
+                /*
+                 * 令牌吊销校验：改密前签发的旧 token 立即失效（不等自然过期）。
+                 * 比较签发时间而非拉黑键，是为了不误伤改密后立刻重新登录拿到的新 token。
+                 * Redis 不可用时 getRevokedBefore 返回 null → 按无吊销放行（fail-open）。
+                 */
+                Long revokedBefore = tokenRevocationService.getRevokedBeforeEpochSecond(userId);
+                // 严格小于（不是 <=）：JWT 的 iat 只有秒级精度，同一秒内无法区分
+                // "改密前签发"与"改密后重登"。取 < 的取舍：
+                //   宁可漏——与改密同秒签发的旧 token 逃过吊销、活到自然过期（≤1h，
+                //   等同于没做吊销时的基线，窗口从"任何 token 1h"缩到"仅同秒 token"）；
+                //   不可误杀——用 <= 时，用户改密后同一秒内重新登录，新 token 会被
+                //   自己的吊销记录踢掉，表现为"改完密码立刻被登出"，不可接受。
+                // 人工操作下"login 与改密同秒"概率极低；要彻底消除需 token 加 jti+黑名单。
+                if (revokedBefore != null && claims.getIssuedAt() != null
+                        && claims.getIssuedAt().getTime() / 1000 < revokedBefore) {
+                    log.info("改密后旧令牌已吊销: userId={}, url={}", userId, request.getRequestURL());
+                    writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                            "密码已修改，请重新登录");
+                    return false;
+                }
                 currentUser = userMapper.selectById(userId);
                 if (currentUser == null) {
-                    writeJson(response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                    writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                             GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
                     return false;
                 }
                 if (!UserStatusEnum.isActive(currentUser.getStatus())) {
                     log.info("已停用账号访问被拦截: userId={}, url={}", userId, request.getRequestURL());
-                    writeJson(response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                    writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                             ServiceErrorCodeConstants.USER_DISABLED.getMsg());
                     return false;
                 }
@@ -114,13 +136,13 @@ public class LoginInterceptor implements HandlerInterceptor {
             boolean isAdmin = currentUser != null
                     && UserIdentityEnum.ADMIN.name().equalsIgnoreCase(currentUser.getIdentity());
             if (adminOnly && !isAdmin) {
-                writeJson(response, GlobalErrorCodeConstants.FORBIDDEN.getCode(),
+                writeJson(request, response, GlobalErrorCodeConstants.FORBIDDEN.getCode(),
                         GlobalErrorCodeConstants.FORBIDDEN.getMsg());
                 return false;
             }
         } catch (Exception e) {
             log.error("token解析异常: {}", e.getMessage());
-            writeJson(response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "Token解析异常");
+            writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "Token解析异常");
             return false;
         }
         return true;
@@ -135,7 +157,21 @@ public class LoginInterceptor implements HandlerInterceptor {
         return path;
     }
 
-    private static void writeJson(HttpServletResponse response, int code, String message) throws Exception {
+    /*
+     * 手写 JSON 写响应（拦截器 preHandle=false 时框架不再走消息转换器）。
+     *
+     * 关键（2026-11-03 修复）：writeJson 直接 getWriter() 输出，绕过了
+     * HttpMessageConverter → OperationLogResponseAdvice 没有触发机会 →
+     * 审计日志的 result_code/result_msg 恒 null——恰恰是最该留业务码的 401/403。
+     * 因此这里手动把业务码塞进与 Advice 相同的 request attribute「信箱」，
+     * afterCompletion 的读取逻辑零改动即可拿到。
+     * 注：本拦截器先于 LoginInterceptor 执行，但 afterCompletion 在外层拦截器
+     *     最后才运行，attribute 此时写入完全来得及被读取。
+     */
+    private static void writeJson(HttpServletRequest request, HttpServletResponse response,
+                                  int code, String message) throws Exception {
+        request.setAttribute(OperationLogInterceptor.ATTR_RESULT_CODE, code);
+        request.setAttribute(OperationLogInterceptor.ATTR_RESULT_MSG, message);
         response.setContentType("application/json;charset=UTF-8");
         response.setStatus(code);
         response.getWriter().write(String.format("{\"code\":%d,\"message\":\"%s\"}", code, message));

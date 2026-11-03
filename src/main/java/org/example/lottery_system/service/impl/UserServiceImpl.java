@@ -46,6 +46,8 @@ public class UserServiceImpl implements UserService {
     private UserMapper userMapper;
     @Autowired
     private VerificationCodeService verificationCodeService;
+    @Autowired
+    private org.example.lottery_system.service.TokenRevocationService tokenRevocationService;
 
     @Override
     public UserRegisterDTO register(UserRegisterParam param) {
@@ -425,7 +427,10 @@ public class UserServiceImpl implements UserService {
         // 4. 落库
         userMapper.updatePassword(userId, DigestUtil.sha256Hex(param.getNewPassword()));
         consumeVerificationCode(userDo, param);
-        log.info("用户 {} 修改密码成功", userId);
+        // 5. 吊销改密前签发的旧 token（Redis 记吊销时刻，拦截器比对签发时间）。
+        //    放在落库之后：密码没改成成功就不会误踢自己的线。
+        tokenRevocationService.revokeTokensIssuedBefore(userId);
+        log.info("用户 {} 修改密码成功，旧令牌已吊销", userId);
         return true;
     }
 

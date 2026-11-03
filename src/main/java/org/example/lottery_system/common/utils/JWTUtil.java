@@ -26,9 +26,11 @@ public class JWTUtil {
     private static final SecretKey SECRET_KEY =
             Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
     /**
-     * 过期时间(单位: 毫秒)
+     * 过期时间(单位: 毫秒)。
+     * 注意：TokenRevocationService 的吊销记录 TTL 引用此值——
+     * 「记录保留时长 ≥ token 最长存活」这个不变式靠共用这一个常量维持，改这里需同步检查那边。
      */
-    private static final long EXPIRATION = 60 * 60 * 1000;
+    public static final long EXPIRATION = 60 * 60 * 1000;
 
     /**
      * 生成密钥
