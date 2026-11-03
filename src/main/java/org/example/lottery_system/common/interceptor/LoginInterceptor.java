@@ -59,10 +59,9 @@ public class LoginInterceptor implements HandlerInterceptor {
              * 若将来流量上来，可改为「停用时把该用户 id 写入 Redis 黑名单」，
              * 查缓存代替查库，或给 token 加版本号让旧 token 失效。
              */
-            Object idObj = claims.get("id");
+            Long userId = JWTUtil.getUserId(claims);   // 统一走工具方法：Number→longValue，杜绝窄化溢出
             UserDO currentUser = null;
-            if (idObj != null) {
-                Long userId = idObj instanceof Long ? (Long) idObj : Long.valueOf(idObj.toString());
+            if (userId != null) {
                 currentUser = userMapper.selectById(userId);
                 if (currentUser == null) {
                     writeJson(response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),

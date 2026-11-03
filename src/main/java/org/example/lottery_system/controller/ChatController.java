@@ -1,6 +1,5 @@
 package org.example.lottery_system.controller;
 
-import io.jsonwebtoken.Claims;
 import org.example.lottery_system.common.pojo.CommonResult;
 import org.example.lottery_system.common.utils.JWTUtil;
 import org.example.lottery_system.service.ai.AiCustomerService;
@@ -13,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -137,17 +135,8 @@ public class ChatController {
         return modeResolver.isFramework();
     }
 
-    /** 从 token 解析 userId,失败返回 null */
+    /** 从 token 解析 userId,失败/未登录返回 null（客服接口允许匿名） */
     private Long parseUserId(String token) {
-        if (!StringUtils.hasText(token)) {
-            return null;
-        }
-        try {
-            Claims claims = JWTUtil.parseJWT(token);
-            Object id = claims.get("id");
-            return id != null ? Long.valueOf(id.toString()) : null;
-        } catch (Exception e) {
-            return null;
-        }
+        return JWTUtil.getUserIdFromToken(token);
     }
 }

@@ -162,13 +162,9 @@ public class OperationLogInterceptor implements HandlerInterceptor {
             request.setAttribute(ATTR_IDENTITY, IDENTITY_ANONYMOUS);
             return;
         }
-        Object id = claims.get("id");
-        if (id != null) {
-            try {
-                request.setAttribute(ATTR_USER_ID, Long.valueOf(id.toString()));
-            } catch (NumberFormatException ignored) {
-                //id 不是数字时不记录用户，不影响其它字段
-            }
+        Long userId = JWTUtil.getUserId(claims);
+        if (userId != null) {
+            request.setAttribute(ATTR_USER_ID, userId);
         }
         Object identity = claims.get("identity");
         request.setAttribute(ATTR_IDENTITY,

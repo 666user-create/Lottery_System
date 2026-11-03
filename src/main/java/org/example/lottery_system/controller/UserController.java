@@ -201,8 +201,11 @@ public class UserController {
             return CommonResult.error(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                     GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
         }
-        Object idObj = claims.get("id");
-        Long userId = idObj instanceof Long ? (Long) idObj : Long.valueOf(idObj.toString());
+        Long userId = JWTUtil.getUserId(claims);
+        if (userId == null) {
+            return CommonResult.error(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                    GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
+        }
         UserDTO userDTO = userService.findById(userId);
         if (userDTO == null) {
             return CommonResult.error(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "用户不存在");
@@ -297,15 +300,11 @@ public class UserController {
 
     /** 从 token 中取当前用户ID，未登录直接抛 401（交由全局异常处理） */
     private Long requireLoginUserId(HttpServletRequest request) {
-        Claims claims = JWTUtil.parseJWT(request.getHeader("token"));
-        if (claims == null) {
+        Long userId = JWTUtil.getUserIdFromToken(request.getHeader("token"));
+        if (userId == null) {
             throw new ServiceException(GlobalErrorCodeConstants.UNAUTHORIZED);
         }
-        Object idObj = claims.get("id");
-        if (idObj == null) {
-            throw new ServiceException(GlobalErrorCodeConstants.UNAUTHORIZED);
-        }
-        return idObj instanceof Long ? (Long) idObj : Long.valueOf(idObj.toString());
+        return userId;
     }
 
     private List<BaseUserInfoResult> convertToList(List<UserDTO> userDTOList) {

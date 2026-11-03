@@ -73,10 +73,9 @@ public class ClaimController {
         return CommonResult.success(claimService.confirmReceived(userId, recordId));
     }
 
-    /** 从 token 取当前登录用户 id(JWTUtil 返回 Integer,这里转 Long) */
+    /** 从 token 取当前登录用户 id */
     private Long currentUserId(String token) {
-        Integer userId = JWTUtil.getUserIdFromToken(token);
-        return userId == null ? null : userId.longValue();
+        return JWTUtil.getUserIdFromToken(token);
     }
 
     // ==================== 管理端:中奖履约管理 ====================

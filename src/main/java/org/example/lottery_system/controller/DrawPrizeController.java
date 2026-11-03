@@ -54,8 +54,11 @@ public class DrawPrizeController {
             return CommonResult.error(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                     GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
         }
-        Object idObj = claims.get("id");
-        Long userId = idObj instanceof Long ? (Long) idObj : Long.valueOf(idObj.toString());
+        Long userId = JWTUtil.getUserId(claims);
+        if (userId == null) {
+            return CommonResult.error(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                    GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
+        }
         List<WinningRecordDTO> winningRecordsDTOList = drawPrizeService.getMyRecords(userId);
         return CommonResult.success(convertToWinningRecordResult(winningRecordsDTOList));
     }

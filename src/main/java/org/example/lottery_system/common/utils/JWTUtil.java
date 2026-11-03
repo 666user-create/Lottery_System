@@ -67,23 +67,24 @@ public class JWTUtil {
     }
 
     /**
-     * 从 token 中取用户 id，与登录签发时的 claim 键名 {@code id} 一致。
+     * 从已解析的 Claims 取用户 id，与登录签发时的 claim 键名 {@code id} 一致。
+     *
+     * 只认 Number（JJWT 把签发的 Long 按数值大小还原为 Integer/Long/BigInteger），
+     * 统一 longValue()——主键是 bigint，窄化成 Integer 会在超 21 亿时静默溢出。
+     * 非 Number（含字符串）一律返回 null：认证 fail-closed，不兼容异常 token。
      */
-    public static Integer getUserIdFromToken(String jwtToken) {
-        Claims claims = JWTUtil.parseJWT(jwtToken);
+    public static Long getUserId(Claims claims) {
         if (claims == null) {
             return null;
         }
         Object id = claims.get("id");
-        if (id instanceof Integer) {
-            return (Integer) id;
-        }
-        if (id instanceof Long) {
-            return ((Long) id).intValue();
-        }
-        if (id instanceof Number) {
-            return ((Number) id).intValue();
-        }
-        return null;
+        return id instanceof Number ? ((Number) id).longValue() : null;
+    }
+
+    /**
+     * 从 token 字符串直接取用户 id（含验签；token 无效/缺失返回 null）。
+     */
+    public static Long getUserIdFromToken(String jwtToken) {
+        return getUserId(parseJWT(jwtToken));
     }
 }

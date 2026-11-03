@@ -122,16 +122,10 @@ public class HandoverController {
 
     /** 从 token 解析 userId,解析失败返回 null(不影响转人工) */
     private Long parseUserId(String token) {
-        if (!StringUtils.hasText(token)) {
-            return null;
+        Long userId = JWTUtil.getUserIdFromToken(token);
+        if (userId == null && token != null && !token.isEmpty()) {
+            log.warn("token解析失败或未携带有效id");
         }
-        try {
-            Claims claims = JWTUtil.parseJWT(token);
-            Object id = claims.get("id");
-            return id != null ? Long.valueOf(id.toString()) : null;
-        } catch (Exception e) {
-            log.warn("token解析失败: {}", e.getMessage());
-            return null;
-        }
+        return userId;
     }
 }
