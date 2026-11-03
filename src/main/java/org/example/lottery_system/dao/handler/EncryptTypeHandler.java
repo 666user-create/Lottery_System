@@ -34,8 +34,6 @@ public class EncryptTypeHandler extends BaseTypeHandler<Encrypt> {
             ps.setString(i, null);
             return;
         }
-        //加密前值
-        System.out.println(parameter.getValue());
         //加密
         AES aes = SecureUtil.aes(key);
         String str = aes.encryptHex(parameter.getValue());
@@ -51,8 +49,6 @@ public class EncryptTypeHandler extends BaseTypeHandler<Encrypt> {
      * */
     @Override
     public Encrypt getNullableResult(ResultSet rs, String columnName) throws SQLException {
-        //获取值得到的加密值
-        System.out.println(rs.getString(columnName));
         return decrypt(rs.getString(columnName));
     }
 
@@ -65,8 +61,6 @@ public class EncryptTypeHandler extends BaseTypeHandler<Encrypt> {
      * */
     @Override
     public Encrypt getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
-        //获取值得到的加密值
-        System.out.println(rs.getString(columnIndex));
         return decrypt(rs.getString(columnIndex));
     }
 
@@ -79,8 +73,6 @@ public class EncryptTypeHandler extends BaseTypeHandler<Encrypt> {
      * */
     @Override
     public Encrypt getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
-        //获取值得到的加密值
-        System.out.println(cs.getString(columnIndex));
         return decrypt((cs.getString(columnIndex)));
     }
     /*
