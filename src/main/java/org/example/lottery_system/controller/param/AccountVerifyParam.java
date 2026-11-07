@@ -20,7 +20,7 @@ import lombok.ToString;
  * 三种方式都只能改**当前登录者本人**的邮箱/密码，userId 取自 token，不接受入参指定他人。
  *
  * 关于 verifyType=secret：
- * 口令是所有管理员共用的常量（见 application.properties 的 admin.secret），不是个人因素。
+ * 口令是所有管理员共用的源码常量（AdminSecretConstants.ADMIN_SECRET），不是个人因素。
  * 它解决的是「管理员已登录但忘记密码 / 收不到短信」的自救场景。
  * 代价是信任等级低于原密码与本人手机——但该会话本就已是管理员权限，
  * 能造成的破坏远大于改自己凭证，故取舍上可接受。

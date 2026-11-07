@@ -2,6 +2,7 @@ package org.example.lottery_system.service.impl;
 
 import cn.hutool.crypto.digest.DigestUtil;
 import jakarta.validation.constraints.NotBlank;
+import org.example.lottery_system.common.constant.AdminSecretConstants;
 import org.example.lottery_system.common.errorcode.ServiceErrorCodeConstants;
 import org.example.lottery_system.common.exception.ServiceException;
 import org.example.lottery_system.common.utils.JWTUtil;
@@ -27,7 +28,6 @@ import org.example.lottery_system.service.enums.VerificationSceneEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -285,12 +285,10 @@ public class UserServiceImpl implements UserService {
     public static final String VERIFY_TYPE_SECRET = "secret";
 
     /**
-     * 管理员口令。与 UserController 的注册授权共用同一个配置项，
-     * 保证「注册管理员」与「口令验证改凭证」不会出现两份不同步的常量。
+     * 管理员口令校验：单点定义见 AdminSecretConstants——
+     * 与 UserController 的注册授权共用同一个常量，
+     * 保证「注册管理员」与「口令验证改凭证」不会出现两份不同步的值。
      */
-    @Value("${admin.secret}")
-    private String adminSecret;
-
     @Override
     public String getMaskedPhoneNumber(Long userId) {
         UserDO userDo = userMapper.selectById(userId);
@@ -479,7 +477,7 @@ public class UserServiceImpl implements UserService {
         if (!StringUtils.hasText(secret)) {
             throw new ServiceException(ServiceErrorCodeConstants.SECRET_EMPTY);
         }
-        if (!secret.equals(adminSecret)) {
+        if (!secret.equals(AdminSecretConstants.ADMIN_SECRET)) {
             throw new ServiceException(ServiceErrorCodeConstants.SECRET_ERROR);
         }
     }

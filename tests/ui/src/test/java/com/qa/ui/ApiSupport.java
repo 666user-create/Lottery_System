@@ -5,9 +5,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -25,48 +22,16 @@ public final class ApiSupport {
 
     public static final String BASE = "http://localhost:8080";
     /**
-     * 管理员注册口令：<b>不写入仓库</b>。真值在项目根
-     * {@code src/main/resources/application-local.properties}（该文件 .gitignore 已忽略）。
-     *
-     * <p>解析顺序：环境变量 {@code ADMIN_SECRET} → 系统属性 {@code -Dadmin.secret}
-     * → 本机私有配置文件。都没配时为空，管理员注册用例会失败——这是预期行为：
-     * 与其把口令提交进 git，不如让缺配置显式暴露。
+     * 管理员注册口令：与服务端源码常量保持一致。
+     * 唯一事实来源：src/main/java/.../common/constant/AdminSecretConstants.java；
+     * 改那边必须同步改这里——两侧不一致时管理员注册用例会失败，显式暴露而非静默。
      */
-    private static final String ADMIN_SECRET = resolveAdminSecret();
+    private static final String ADMIN_SECRET = "274699";
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
     private ApiSupport() {
-    }
-
-    private static String resolveAdminSecret() {
-        String env = System.getenv("ADMIN_SECRET");
-        if (env != null && !env.isBlank()) {
-            return env;
-        }
-        String prop = System.getProperty("admin.secret");
-        if (prop != null && !prop.isBlank()) {
-            return prop;
-        }
-        // mvn 在 tests/ui 下执行时 cwd=tests/ui；IDEA 里通常 cwd=项目根，故两个相对路径都试
-        Path local = Paths.get("src", "main", "resources", "application-local.properties");
-        if (!Files.isRegularFile(local)) {
-            local = Paths.get("..", "..", "src", "main", "resources", "application-local.properties");
-        }
-        try {
-            if (Files.isRegularFile(local)) {
-                for (String line : Files.readAllLines(local, StandardCharsets.UTF_8)) {
-                    String trimmed = line.trim();
-                    if (trimmed.startsWith("ADMIN_SECRET=")) {
-                        return trimmed.substring("ADMIN_SECRET=".length()).trim();
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-            // 读不到就当未配置，由用例失败显式暴露
-        }
-        return "";
     }
 
     // ==================== HTTP ====================

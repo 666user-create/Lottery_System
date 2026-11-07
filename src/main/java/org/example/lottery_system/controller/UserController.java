@@ -2,6 +2,7 @@ package org.example.lottery_system.controller;
 
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
+import org.example.lottery_system.common.constant.AdminSecretConstants;
 import org.example.lottery_system.common.errorcode.ControllerErrorCodeConstants;
 import org.example.lottery_system.common.errorcode.GlobalErrorCodeConstants;
 import org.example.lottery_system.common.errorcode.ServiceErrorCodeConstants;
@@ -34,7 +35,6 @@ import org.example.lottery_system.service.enums.VerificationSceneEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,11 +60,11 @@ public class UserController {
     @Autowired
     private ClaimService claimService;
     /**
-     * 管理员口令。原先硬编码为 "lottery-admin-2024"，现统一从配置读取，
-     * 与 UserServiceImpl 的 verifyType=secret 校验共用同一个值。
+     * 管理员口令：单点定义见 AdminSecretConstants——注册授权与
+     * UserServiceImpl 的 verifyType=secret 共用同一个常量，不会出现两份不同步的值。
+     * （历史上先是两处各硬编码、再外置成 admin.secret 配置又引入"忘配=空串"风险，
+     * 现在回退为明文常量：本项目不对外部署，这个取舍记录在常量类注释里。）
      */
-    @Value("${admin.secret}")
-    private String adminSecretConfig;
     /*
     * 注册
     *
@@ -92,7 +92,7 @@ public class UserController {
         String token = request.getHeader("token");
         String adminSecret = request.getHeader("X-Admin-Secret");
         // 与 UserServiceImpl 的 verifyType=secret 共用同一配置项，避免两份常量不同步
-        boolean hasSecret = adminSecretConfig != null && adminSecretConfig.equals(adminSecret);
+        boolean hasSecret = AdminSecretConstants.ADMIN_SECRET.equals(adminSecret);
         Claims claims = JWTUtil.parseJWT(token);
         if (claims == null) {
             // 无登录态：携带正确口令 → ADMIN，否则 → NORMAL

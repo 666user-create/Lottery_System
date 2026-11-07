@@ -12,7 +12,6 @@
   两者语义不同却同码 → 调用方无法区分，已登记为契约风险待业主确认。
 """
 import os
-from pathlib import Path
 
 # ==================== 环境 ====================
 BASE_URL = os.getenv("LOTTERY_BASE_URL", "http://localhost:8080")
@@ -39,28 +38,11 @@ TEST_ADMIN = {
     "password": "123456",
     "identity": "ADMIN",
 }
-# 管理员注册口令（来源：UserController.applyRegisterIdentityPolicy）
-# 真值只在 src/main/resources/application-local.properties（该文件不入库）；
-# 也可用环境变量 ADMIN_SECRET 覆盖（CI / 临时会话用）。
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
-_LOCAL_PROPS_PATH = _PROJECT_ROOT / "src" / "main" / "resources" / "application-local.properties"
-
-
-def _read_local_props() -> dict:
-    """读本机私有配置；文件不存在时返回空 dict（裸克隆里也能 import，失败只会体现在管理员用例上）。"""
-    props = {}
-    if not _LOCAL_PROPS_PATH.is_file():
-        return props
-    for line in _LOCAL_PROPS_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            props[key.strip()] = value.strip()
-    return props
-
-
-_LOCAL_PROPS = _read_local_props()
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", _LOCAL_PROPS.get("ADMIN_SECRET", ""))
+# 管理员注册口令：与源码常量保持一致
+# （唯一事实来源：common/constant/AdminSecretConstants.java 的 ADMIN_SECRET；
+#   改那边必须同步改这里——两侧都明文，一致性靠回归用例 test_01 兜底：
+#   不一致时管理员注册/代建用例会立刻失败，不会再出现"静默空口令"）
+ADMIN_SECRET = "274699"
 ADMIN_SECRET_HEADER = "X-Admin-Secret"
 
 # 真实基础数据（只读，绝不修改）——用于"不碰真实数据"的断言基线
