@@ -40,7 +40,7 @@ public class TracingHintRunner implements ApplicationRunner, Ordered {
     private boolean autoStart;
 
     /** Zipkin 可执行 jar 的绝对路径 */
-    @Value("${app.zipkin.jar:D:/java/lottery_system/zipkin/zipkin-server-3.6.1-exec.jar}")
+    @Value("${app.zipkin.jar:./zipkin/zipkin-server-3.6.1-exec.jar}")
     private String zipkinJar;
 
     /** 等待 Zipkin 起来的最长时间(秒);jar 冷启动实测约 8~12 秒 */

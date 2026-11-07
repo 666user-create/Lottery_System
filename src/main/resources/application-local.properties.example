@@ -6,8 +6,9 @@
 #      spring.config.import=optional:classpath:application-local.properties 加载）
 # 也可改用同名系统环境变量覆盖，不必建文件。
 
-# 管理员注册口令（X-Admin-Secret）
-ADMIN_SECRET=
+# 管理员注册口令不再放这里：它是源码常量
+# src/main/java/org/example/lottery_system/common/constant/AdminSecretConstants.java
+# （本项目不部署到外部，明文常量足够；曾尝试配置外置，因"忘配=空串可造管理员"已回退）
 
 # MySQL 密码（默认 root，见 application.properties）
 DB_PASSWORD=root
