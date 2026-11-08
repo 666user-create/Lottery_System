@@ -103,8 +103,8 @@ class Code:
 
 
 # ==================== 鉴权路径（契约基线） ====================
-# 需 ADMIN 身份（LoginInterceptor.java:82-106，16 条 path 规则覆盖 23 个端点；
-# 其中 /prize/、/api/faq/、/api/winning/manage/、/api/stat/、/api/operation-log/、
+# 需 ADMIN 身份（LoginInterceptor 的 adminOnly 规则；
+# 其中 /prize/、/api/faq/、/api/winning/manage/、/api/operation-log/、
 # /api/ai/rag/ 为前缀规则，各自覆盖多个端点）
 ADMIN_ONLY_PATHS = [
     ("POST", "/activity/create"),
@@ -117,11 +117,9 @@ ADMIN_ONLY_PATHS = [
     ("GET", "/api/faq/list"),
     ("GET", "/api/handover/list"),
     ("POST", "/api/handover/process"),
-    # ↓ 2026-10-16 补齐：以下 5 个端点一直在代码 adminOnly 内，但此前未纳入权限矩阵
+    # ↓ 2026-10-16 补齐：以下端点一直在代码 adminOnly 内，但此前未纳入权限矩阵
     #   /draw/prize 的源码注释写明「前端 localStorage.user_identity 可被伪造，服务端必须兜底」
     ("POST", "/draw/prize"),
-    ("GET", "/api/stat/overview"),
-    ("GET", "/api/stat/activity"),
     ("GET", "/api/operation-log/list"),
     ("GET", "/api/ai/rag/diagnose"),
     # ↓ 2026-10-20 新增：用户详情（配套 user-detail.html）

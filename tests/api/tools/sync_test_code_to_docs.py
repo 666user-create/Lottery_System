@@ -45,7 +45,6 @@ DISPATCH = [
     ("12-依赖降级", "test_12_dependency.py"),
     ("13-结果正确性", "test_13_result_correctness.py"),
     ("14-缺陷防退化", "test_14_bugfix_regression.py"),
-    ("15-数据统计", "test_15_stat.py"),
     ("16-操作日志", "test_16_operation_log.py"),
     ("17-RAG诊断", "test_17_rag_diagnose.py"),
     ("18-存量接口补齐", "test_18_gap_coverage.py"),

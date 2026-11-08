@@ -120,8 +120,6 @@ public class LoginInterceptor implements HandlerInterceptor {
                     || path.startsWith("/api/winning/manage/")
                     // AI 客服：RAG 检索诊断（含知识库内容，仅管理员可见）
                     || path.startsWith("/api/ai/rag/")
-                    // 数据统计：仅管理员可查看
-                    || path.startsWith("/api/stat/")
                     // 操作日志：仅管理员可查看
                     || path.startsWith("/api/operation-log/")
                     // 抽奖执行：前端用 localStorage.user_identity 判断可被伪造，服务端必须兜底
