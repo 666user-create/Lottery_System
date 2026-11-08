@@ -105,23 +105,6 @@ CREATE TABLE `faq` (
 ) ENGINE=InnoDB AUTO_INCREMENT=197 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='AI瀹㈡湇鐭ヨ瘑搴';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
--- Table structure for table `faq_embedding`
---
-
-DROP TABLE IF EXISTS `faq_embedding`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `faq_embedding` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '涓婚敭',
-  `faq_id` bigint NOT NULL COMMENT '瀵瑰簲faq琛ㄧ殑id',
-  `embedding` text COLLATE utf8mb4_general_ci NOT NULL COMMENT '鍚戦噺,JSON鏁扮粍瀛楃?涓?濡?[0.12,-0.35,...]',
-  `gmt_create` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '鍒涘缓鏃堕棿',
-  `gmt_modified` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '淇?敼鏃堕棿',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_faq_id` (`faq_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=122 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='FAQ鍚戦噺琛';
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `human_handover`

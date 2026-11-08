@@ -1,8 +1,8 @@
 """本地 mock Embedding 服务:模拟"远程向量服务可用"的场景。
 
-用途:验证 app.rag.mode=auto 时,远程向量可用 → 走 simple 模式 + 补全 faq_embedding。
+用途:历史遗留的远程向量 mock 服务。simple 模式已删除,当前 app.rag.mode=framework 不使用它;
 说明:用字符二元组(bigram)哈希生成向量,使"字面相近"的文本余弦相似度高,
-      足以让 simple 模式的向量检索真正命中对应 FAQ(真实质量仍需真实 Key)。
+用途:历史遗留的远程向量 mock 服务。simple 模式已删除,当前 app.rag.mode=framework 不使用它;
 """
 import hashlib
 import json
