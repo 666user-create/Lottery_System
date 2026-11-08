@@ -13,7 +13,7 @@ public class RestTemplateConfig {
      * 默认 RestTemplate:不加超时限制。
      *
      * 注意:DeepSeek 的对话补全请求耗时可能几十秒,不能用短超时,
-     * 否则会误杀正常的大模型调用(手写实现 AiCustomerService / XiaoDongChatService 都在用)。
+     * 否则会误杀正常的大模型调用(framework 的 FrameworkChatService 也走这个 RestTemplate)。
      *
      * 用 RestTemplateBuilder 构造(而不是 new RestTemplate()):
      * 这样会自动挂上 Micrometer 观测拦截器,Zipkin 里就能看到 `http post /v1/chat/completions`

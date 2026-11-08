@@ -34,7 +34,7 @@ class TestAiChatKeyPath:
 
     def test_tool_call_chat_sync(self, anon_client):
         """正常流：工具调用聊天返回非空回答（游客可用）"""
-        resp = anon_client.post("/api/chat/sync",
+        resp = anon_client.post("/api/ai/chat/sync",
                                json_body={"message": "查询所有活动"},
                                timeout=config.AI_TIMEOUT)
         assert_success(resp, hint="[AI工具调用聊天]", expect_data=True)

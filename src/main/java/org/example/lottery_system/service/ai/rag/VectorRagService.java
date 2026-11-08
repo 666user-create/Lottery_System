@@ -23,9 +23,9 @@ import java.util.Set;
  * 检索链路:向量召回(SimpleVectorStore) → 本地重排(LocalReRanker) → 组装知识上下文
  *           └─ 任一步异常 → 关键词检索降级(保证问答链路不中断)
  *
- * 与原有 RagService(手写实现)的关系:
+ * 已删除的手写版 simple 模式曾用 MySQL faq_embedding 表做向量检索，本类改用 SimpleVectorStore。
  * - 本类为「框架化重构版」,通过 app.rag.mode=framework 启用
- * - 原 RagService 保留,可切换回 simple 模式做对照
+ * （原 simple 手写实现已于 2026-11 删除，此处仅作演进说明）
  */
 @Service
 public class VectorRagService {

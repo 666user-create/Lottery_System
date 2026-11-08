@@ -1,12 +1,8 @@
 package org.example.lottery_system.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.lottery_system.common.pojo.CommonResult;
 import org.example.lottery_system.dao.dataobject.FaqDO;
-import org.example.lottery_system.dao.dataobject.FaqEmbeddingDO;
-import org.example.lottery_system.dao.mapper.FaqEmbeddingMapper;
 import org.example.lottery_system.dao.mapper.FaqMapper;
-import org.example.lottery_system.service.ai.EmbeddingClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,11 +23,8 @@ import java.util.Map;
 public class FaqController {
 
     private static final Logger log = LoggerFactory.getLogger(FaqController.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Autowired private FaqMapper faqMapper;
-    @Autowired private FaqEmbeddingMapper faqEmbeddingMapper;
-    @Autowired private EmbeddingClient embeddingClient;
     /** 向量索引服务:FAQ 增删后必须同步索引,否则客服检索不到新知识(修复项) */
     @Autowired private org.example.lottery_system.service.ai.rag.KnowledgeIndexService knowledgeIndexService;
 
@@ -43,22 +36,8 @@ public class FaqController {
     @PostMapping("/add")
     public CommonResult<Long> add(@Validated @RequestBody FaqDO faqDO) {
         faqMapper.insert(faqDO);
-        // faq_embedding 表是 simple 模式的向量存储。
-        // 现在向量来源默认是本地模型(不需要 Key、不产生网络报错),所以两种模式下都同步维护,
-        // 保证任何时候切到 simple 模式,知识库向量都是齐的。
-        if (embeddingClient.isUsable()) {
-            try {
-                double[] vector = embeddingClient.embed(faqDO.getQuestion());
-                FaqEmbeddingDO embeddingDO = new FaqEmbeddingDO();
-                embeddingDO.setFaqId(faqDO.getId());
-                embeddingDO.setEmbedding(MAPPER.writeValueAsString(vector));
-                faqEmbeddingMapper.insert(embeddingDO);
-                log.info("FAQ[{}] 向量生成成功({})", faqDO.getId(), embeddingClient.describe());
-            } catch (Exception e) {
-                log.warn("FAQ[{}] 向量生成失败,simple 模式将走关键词兜底: {}", faqDO.getId(), e.getMessage());
-            }
-        }
-        // 同步更新框架化向量索引(SimpleVectorStore),否则客服检索不到这条新知识
+        // 同步更新框架化向量索引(SimpleVectorStore),否则客服检索不到这条新知识。
+        // 注：原 simple 模式还额外写 faq_embedding 表，simple 实现已删除，表保留但不再写入。
         try {
             knowledgeIndexService.addOrUpdateFaq(faqDO);
         } catch (Exception e) {
@@ -71,7 +50,6 @@ public class FaqController {
     @DeleteMapping("/delete")
     public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
         faqMapper.deleteById(id);
-        faqEmbeddingMapper.deleteByFaqId(id);
         // 同步从向量索引移除,否则客服仍会检索到已删除的知识
         try {
             knowledgeIndexService.removeFaqFromIndex(id);

@@ -17,7 +17,7 @@ import java.util.Arrays;
  * 注册后:
  * 1. 本项目通过 spring-ai-starter-mcp-server-webmvc 暴露 MCP 端点,
  *    任何支持 MCP 的 AI 客户端(Claude Desktop、其他 AI 应用)都能调用这些工具。
- * 2. 项目内部的客服实现(AiCustomerService / FrameworkChatService)也用同一批工具,
+ * 2. 项目内部的客服实现(FrameworkChatService)也用同一批工具,
  *    但走的是 {@code InternalToolCallbacks}(见该类注释),拿到的是【全部】工具。
  *
  * ⚠️ 对外 / 对内工具集不同(本次调整):

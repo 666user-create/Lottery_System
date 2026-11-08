@@ -37,8 +37,8 @@ import java.util.stream.Collectors;
  * 如需查用户,请走 /user/base-user/find-list(受 adminOnly 保护);
  * 如需查工单,请走 /api/handover/list(受 adminOnly 保护)。
  *
- * 历史背景:本项目最早在 XiaoDongChatService 里手写了工具调用(TOOLS JSON + 解析循环),
- * 现在已迁移到 MCP 标准。手写版本代码保留在 XiaoDongChatService 中作为参考,未删除。
+ * 历史背景:本项目最早手写了工具调用(TOOLS JSON + 解析循环),该实现已于 2026-11 删除,
+ * 现在已迁移到 MCP 标准。手写版本已在 2026-11 统一框架化时删除。
  */
 @Service
 public class McpTools {
