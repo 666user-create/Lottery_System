@@ -134,14 +134,65 @@ public class FrameworkChatService {
         }
     }
 
-    /** SSE 流式接口用:按句子切块输出 */
+    /**
+     * SSE 流式接口：真流式（逐 token 透传），而非"先完整回答再按句切"。
+     *
+     * <p>2026-11 由伪流式改造而来。改造前实现是 {@code chat(...)} 拿到完整回答后
+     * 按句号切分再依次返回，用户看到第一句的等待时间 = 整段生成时间（~1.5s）。
+     * 现在走 {@code ChatClient...stream().content()}，首 token 到达即推送（~0.3s）。
+     *
+     * <p>三条链路约束的处理：
+     * <ol>
+     *   <li><b>输入敏感词 / 转人工</b>：仍是调用模型前的确定性判断，直接返回单块文本，
+     *       不必进入流式链路（这两条本来就没有"边生成边输出"的必要）。</li>
+     *   <li><b>输出敏感词打码</b>：流式下无法等全文再 replace，改用
+     *       {@link org.example.lottery_system.service.ai.safety.SensitiveWordFilter.StreamingMasker}
+     *       ——保留末尾 maxWordLength-1 字符延迟输出，避免跨 chunk 的敏感词漏检。</li>
+     *   <li><b>异常兜底</b>：{@code onErrorResume} 返回友好话术，避免前端 loading 卡死。</li>
+     * </ol>
+     */
     public Flux<String> chatStream(String userMessage, String sessionId, Long userId) {
-        String reply = chat(userMessage, sessionId, userId);
-        String[] chunks = reply.split("(?<=[。!?！?\\n])");
-        if (chunks.length == 0) {
-            return Flux.just(reply);
+        // 1. 输入侧敏感词：命中直接拒答（不入流式链路）
+        List<String> hits = sensitiveWordFilter.findHits(userMessage);
+        if (!hits.isEmpty()) {
+            log.warn("用户输入命中敏感词 {} 个,已拦截", hits.size());
+            return Flux.just("您的问题包含不当内容,请调整后再试～ 如需帮助可以转接人工客服。");
         }
-        return Flux.fromArray(chunks);
+
+        // 2. 转人工意图：建工单 + 固定话术（不入流式链路）
+        if (containsHandoverKeyword(userMessage)) {
+            createHandover(userMessage, sessionId, userId);
+            return Flux.just("好的,已为您转接人工客服,请稍候,客服人员会尽快联系您～ 🙋‍♀️");
+        }
+
+        // 3. 流式调用模型：Advisor 链（RAG + 记忆 + 工具）由框架透明处理
+        ChatClient.ChatClientRequestSpec spec = chatClient.prompt()
+                .system(buildSystemPrompt(userId))
+                .user(userMessage)
+                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, sessionId));
+
+        Map<String, Object> toolContext = new HashMap<>();
+        if (userId != null) {
+            toolContext.put("userId", userId);
+        } else {
+            toolContext.put("anonymous", Boolean.TRUE);
+        }
+        spec = spec.toolContext(toolContext);
+
+        // 4. 逐 token 输出 + 流式敏感词打码
+        SensitiveWordFilter.StreamingMasker masker = sensitiveWordFilter.newStreamingMasker();
+        return spec.stream()
+                .content()
+                .map(masker::drain)                      // 边界安全输出（可能返回空串）
+                .filter(s -> !s.isEmpty())               // 丢弃空块，避免前端收到空事件
+                .concatWith(Flux.defer(() -> {           // 流结束补吐缓冲尾巴
+                    String tail = masker.flush();
+                    return tail.isEmpty() ? Flux.<String>empty() : Flux.just(tail);
+                }))
+                .onErrorResume(e -> {                    // 异常兜底：不要静默中断
+                    log.error("流式对话异常", e);
+                    return Flux.just("小东:抱歉,我暂时无法回答,请稍后再试～(" + e.getMessage() + ")");
+                });
     }
 
     /**
