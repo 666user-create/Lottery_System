@@ -80,19 +80,31 @@ public class MqReceiver {
         List<WinningRecordDO> winningRecordDOList;
         try {
             if (!drawPrizeService.checkDrawPrizeParam(param)) {
-                logger.warn("抽奖请求校验未通过 messageId={} param:{}", messageId, JacksonUtil.writeValueAsString(param));
+                // 校验不通过属于「不可重试失败」：活动已结束/奖品已抽走/重复中奖，
+                // 重试再多次结论都一样，因此吞掉并 ACK，靠日志 + messageId 回溯。
+                logger.warn("抽奖请求校验未通过(不可重试,消息将ACK) messageId={} param:{}",
+                        messageId, JacksonUtil.writeValueAsString(param));
                 return;
             }
             statusConvert(param);
             winningRecordDOList = drawPrizeService.saveWinnerRecords(param);
         } catch (ServiceException e) {
-            logger.error("mq消息处理异常 messageId={} code={} msg={}", messageId, e.getCode(), e.getMessage(), e);
+            // 业务异常同属不可重试：先补偿回滚，然后吞掉。
+            logger.error("mq消息处理失败(业务异常,不可重试) messageId={} code={} msg={}",
+                    messageId, e.getCode(), e.getMessage(), e);
             safeRollback(param);
             return;
         } catch (Exception e) {
-            logger.error("mq消息处理异常 messageId={}", messageId, e);
+            // ★ 非业务异常（数据库连接抖动、死锁、超时等）属于「可重试失败」：
+            //   回滚之后必须把异常抛出去，Spring AMQP 才会按 retry.max-attempts 重试，
+            //   重试耗尽后消息转入死信队列（DirectQueue 已绑定 DlxExchange）。
+            //
+            //   修复前的实现把所有异常都吞掉：异常不冒泡到监听器容器，容器认为消费成功、
+            //   直接 ACK，导致 application.properties 里的 retry.max-attempts=5 与
+            //   DlxQueue 从未被触发过——重试与死信形同虚设。
+            logger.error("mq消息处理失败(系统异常,将重试并可能进入死信) messageId={}", messageId, e);
             safeRollback(param);
-            return;
+            throw e;
         }
 
         // ===== 第 3 段：通知属于附带动作，失败绝不能影响开奖结果 =====

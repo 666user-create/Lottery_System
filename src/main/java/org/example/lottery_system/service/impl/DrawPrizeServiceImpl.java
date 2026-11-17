@@ -106,6 +106,30 @@ public class DrawPrizeServiceImpl implements DrawPrizeService {
             logger.info("中奖人数与奖品数不一致:{}", JacksonUtil.writeValueAsString(param));
             return false;
         }
+        // ★ 一人一奖：本活动内已中过奖的人不能再次中奖
+        //   此前这个约束只靠前端把已中奖者从候选池剔除，绕过前端直接构造请求即可打破；
+        //   表上唯一索引 uk_w_a_p_id(winner_id, activity_id, prize_id) 只能防"同一奖品重复发"，
+        //   防不住"同一活动内同一个人拿两个不同奖品"，故在此补一道应用层校验。
+        List<Long> winnerIds = param.getWinnerList().stream()
+                .map(DrawPrizeParam.Winner::getUserId)
+                .collect(Collectors.toList());
+        // ★ 请求内部自身也不能有重复用户。
+        //   若不拦：winnerList=[X,X] 能通过上面的人数校验（size=2 == 份数 2），
+        //   但 saveWinnerRecords 用 batchSelectByIds 查用户时 SQL IN(...,X,X,...) 会去重，
+        //   实际只落 1 条中奖记录 —— 少发的那份奖品随活动结束永久丢失，
+        //   且不会报任何错。这是校验口径（winnerList.size）与落库口径（去重后的用户数）不一致导致的。
+        long distinctCount = winnerIds.stream().distinct().count();
+        if (distinctCount != winnerIds.size()) {
+            logger.warn("开奖被拒:中奖名单内存在重复用户 activityId={} prizeId={} 名单={}",
+                    param.getActivityId(), param.getPrizeId(), winnerIds);
+            return false;
+        }
+        List<Long> alreadyWon = winningRecordMapper.selectWinnerIdsInActivity(param.getActivityId(), winnerIds);
+        if (!CollectionUtils.isEmpty(alreadyWon)) {
+            logger.warn("开奖被拒:中奖用户在本活动中已中奖 activityId={} prizeId={} 冲突用户={}",
+                    param.getActivityId(), param.getPrizeId(), alreadyWon);
+            return false;
+        }
         return true;
     }
 

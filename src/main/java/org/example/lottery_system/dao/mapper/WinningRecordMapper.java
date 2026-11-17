@@ -47,6 +47,25 @@ public interface WinningRecordMapper {
     @Select("select * from winning_record where winner_id = #{winnerId} order by winning_time desc")
     List<WinningRecordDO> selectByWinnerId(@Param("winnerId") Long winnerId);
 
+    /**
+     * 查询这些用户在本活动中已经中奖的记录（用于开奖前的「一人一奖」校验）。
+     *
+     * <p>为什么需要它：表上的唯一索引 {@code uk_w_a_p_id(winner_id, activity_id, prize_id)}
+     * 只能防"同一奖品重复发"，防不住"同一活动内拿了两个不同奖品"。
+     * 而项目的业务规则是**一个活动内每人最多中一次奖**，此前这个约束只靠前端
+     * 把已中奖者从候选池剔除来保证——绕过前端直接构造请求即可打破。
+     *
+     * <p>这里只返回冲突的 winner_id，便于调用方给出"哪些人已中奖"的明确报错。
+     */
+    @Select("<script>" +
+            " select distinct winner_id from winning_record " +
+            " where activity_id = #{activityId} " +
+            " and winner_id in " +
+            " <foreach collection='winnerIds' item='wid' open='(' separator=',' close=')'>#{wid}</foreach>" +
+            " </script>")
+    List<Long> selectWinnerIdsInActivity(@Param("activityId") Long activityId,
+                                        @Param("winnerIds") List<Long> winnerIds);
+
     // ==================== 领奖履约(状态推进) ====================
     //
     // 每个迁移都带"原状态条件",靠影响行数判断是否成功:
