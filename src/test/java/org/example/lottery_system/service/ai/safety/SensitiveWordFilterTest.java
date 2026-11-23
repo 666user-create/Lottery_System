@@ -8,14 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 流式敏感词打码的边界安全性测试。
+ * 敏感词过滤器测试。
  *
- * <p>背景：真流式下无法"拿到全文再 replace"，改用 StreamingMasker 保留末尾
- * maxWordLength-1 个字符延迟输出。核心风险是敏感词被切在 chunk 边界时，
- * 若缓冲不足会漏检——把"赌"先发出去、后面再补"博"，敏感词就逃逸了。
+ * <p>背景：本项目的内容安全策略是「命中即整段替换为固定句式」，不再对命中词打码、
+ * 也不再逐 token 流式过滤（SSE 已改为同步返回）。因此原先用于验证
+ * StreamingMasker 跨块边界安全的用例已随实现一并删除。
  *
- * <p>本测试逐字符、按任意切分点喂入，验证任何切分方式下输出都等价于
- * "全文打码后逐段输出"，即跨块敏感词必定被打码。
+ * <p>现在真正决定行为的是 {@link SensitiveWordFilter#findHits(String)}：
+ * 输入侧用它决定是否拒答，输出侧用它决定是否替换为固定句式。
+ * 只要它判断正确，两侧策略就都成立——所以测试集中验证它。
  */
 class SensitiveWordFilterTest {
 
@@ -25,81 +26,60 @@ class SensitiveWordFilterTest {
         return f;
     }
 
-    /** 把整段文本按给定切分喂入 StreamingMasker，返回全部输出拼接 */
-    private String streamThrough(SensitiveWordFilter filter, String text, int chunkSize) {
-        SensitiveWordFilter.StreamingMasker masker = filter.newStreamingMasker();
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < text.length(); i += chunkSize) {
-            out.append(masker.drain(text.substring(i, Math.min(i + chunkSize, text.length()))));
+    @Test
+    @DisplayName("命中演示词库中的词：findHits 返回非空")
+    void detectsWordFromDictionary() {
+        SensitiveWordFilter f = newFilter();
+        assertTrue(f.findHits("这里有赌博内容").contains("赌博"),
+                "应命中『赌博』");
+        assertTrue(f.contains("外挂可以刷奖"),
+                "一句话含多个敏感词时应返回 true");
+    }
+
+    @Test
+    @DisplayName("正常业务问句不应误报（客服高频问题全量过一遍）")
+    void doesNotFlagNormalQuestions() {
+        SensitiveWordFilter f = newFilter();
+        String[] normal = {
+                "怎么参与抽奖？",
+                "我中奖了吗",
+                "领奖需要填什么信息",
+                "活动什么时候结束",
+                "奖品有哪些",
+                "你好",
+        };
+        for (String q : normal) {
+            assertFalse(f.contains(q),
+                    "正常问句被误判为敏感词，会导致客服拒答：" + q);
         }
-        out.append(masker.flush());
-        return out.toString();
     }
 
     @Test
-    @DisplayName("跨 chunk 敏感词必须被打码：任意切分粒度结果一致")
-    void crossChunkSensitiveWordIsMasked() {
-        String text = "这里有赌博内容要屏蔽";
-        String expected = newFilter().replace(text, '*');
-
-        // 从 1 到 全文长度，穷举所有切分粒度
-        for (int size = 1; size <= text.length(); size++) {
-            String actual = streamThrough(newFilter(), text, size);
-            assertEquals(expected, actual,
-                    "chunkSize=" + size + " 时流式输出与全文打码不一致，存在跨块漏检");
-        }
+    @DisplayName("空值与 null 安全：不抛异常、不误报")
+    void handlesEmptyAndNull() {
+        SensitiveWordFilter f = newFilter();
+        assertFalse(f.contains(null), "null 不应判定为命中");
+        assertFalse(f.contains(""), "空串不应判定为命中");
+        assertTrue(f.findHits(null).isEmpty(), "null 的命中列表应为空");
     }
 
     @Test
-    @DisplayName("敏感词正好被切在边界：chunk1 是前缀，chunk2 是后缀")
-    void wordSplitExactlyOnBoundary() {
-        SensitiveWordFilter filter = newFilter();
-        SensitiveWordFilter.StreamingMasker masker = filter.newStreamingMasker();
-
-        // "赌博" 被切成 "赌" + "博"
-        String part1 = masker.drain("赌");
-        String part2 = masker.drain("博");
-        String tail = masker.flush();
-        String all = part1 + part2 + tail;
-
-        assertFalse(all.contains("赌博"), "跨块敏感词漏检：输出中出现完整敏感词。实际=" + all);
-        assertTrue(all.contains("*"), "敏感词未被替换为掩码。实际=" + all);
+    @DisplayName("命中判定与打码替换保持独立：replace 仍可用于需要打码的场合")
+    void replaceStillWorks() {
+        SensitiveWordFilter f = newFilter();
+        String masked = f.replace("这里有赌博内容", '*');
+        assertFalse(masked.contains("赌博"), "打码后不应残留原词：" + masked);
+        assertTrue(masked.contains("*"), "打码结果应包含掩码字符：" + masked);
+        assertEquals("这里有**内容", masked, "等长打码：两字词替换为两个星号");
     }
 
     @Test
-    @DisplayName("流式输出内容与全文打码等价：完整句子的无敏感词文本原样输出")
-    void normalTextPassesThroughUnchanged() {
-        String text = "抽奖活动的参与方式很简单，登录后进入活动页面即可。";
-        String expected = newFilter().replace(text, '*');
-        for (int size = 1; size <= 10; size++) {
-            assertEquals(expected, streamThrough(newFilter(), text, size),
-                    "chunkSize=" + size + " 时正常文本被破坏");
-        }
-        // 无敏感词文本不应被改动
-        assertEquals(text, expected);
-    }
-
-    @Test
-    @DisplayName("空块不应产生可见输出（前端不该收到空事件）")
-    void emptyChunkProducesNothing() {
-        SensitiveWordFilter filter = newFilter();
-        SensitiveWordFilter.StreamingMasker masker = filter.newStreamingMasker();
-        assertEquals("", masker.drain(""));
-        assertEquals("", masker.drain(null));
-        assertEquals("", masker.flush(), "无输入时 flush 应为空");
-    }
-
-    @Test
-    @DisplayName("缓冲长度取自词库最长词，词库扩充后自动适配")
-    void maxWordLengthReflectsWordList() {
-        SensitiveWordFilter filter = newFilter();
-        assertTrue(filter.getMaxWordLength() > 1, "演示词库含多字词，最长长度应大于 1");
-
-        // 加一个更长的词，缓冲长度应随之增长
-        int before = filter.getMaxWordLength();
-        filter.addWord("长词测试用例");
-        assertTrue(filter.getMaxWordLength() >= 5 || filter.getMaxWordLength() == "长词测试用例".length(),
-                "加入更长词后 maxWordLength 未更新");
-        assertTrue(filter.getMaxWordLength() > before || before >= "长词测试用例".length());
+    @DisplayName("词库可动态扩充：addWord 后立即生效")
+    void addWordTakesEffect() {
+        SensitiveWordFilter f = newFilter();
+        String word = "长词测试用例";
+        assertFalse(f.contains(word), "加入前不应命中");
+        f.addWord(word);
+        assertTrue(f.contains(word), "addWord 后应立即命中");
     }
 }

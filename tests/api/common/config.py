@@ -143,7 +143,7 @@ PUBLIC_PATHS = [
     ("POST", "/user/message/login"),
     ("POST", "/user/verification-code/send"),
     ("POST", "/draw/winning-records/show"),   # 有意设计：便于分享抽奖结果
-    ("POST", "/api/ai/chat/sync"),
+    ("POST", "/api/ai/chat"),                 # 客服允许匿名（/sync 端点已删除）
 ]
 
 

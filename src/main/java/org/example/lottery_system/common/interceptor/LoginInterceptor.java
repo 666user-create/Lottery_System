@@ -28,8 +28,6 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Autowired
     private UserMapper userMapper;
-    @Autowired
-    private org.example.lottery_system.service.TokenRevocationService tokenRevocationService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -53,47 +51,61 @@ public class LoginInterceptor implements HandlerInterceptor {
             request.setAttribute(CLAIMS_ATTRIBUTE, claims);
 
             /*
-             * 停用校验：JWT 无服务端状态，只在登录时校验的话，
-             * 账号被停用后已签发的旧 token 仍可一直用到过期——停用就形同虚设。
-             * 因此每次请求都要回库确认状态。
+             * 为什么每请求都回库：JWT 无服务端状态，claim 只是登录那一刻的快照。
+             * 只在登录时校验的话，账号被停用 / 被降级后，已签发的旧 token 仍能一直用到过期
+             * ——"停用""降级"就形同虚设。因此每次请求都要回库确认。
              *
              * 代价：每个带 token 的请求多一次主键查询（微秒级，且全库无外键、数据量小）。
-             * 若将来流量上来，可改为「停用时把该用户 id 写入 Redis 黑名单」，
-             * 查缓存代替查库，或给 token 加版本号让旧 token 失效。
+             * 收益不止状态校验：本方法后面判管理员时也要 identity，同一次查询零成本带出；
+             * 令牌代数（token_version）同样搭这趟车，不额外增加查询。
              */
             Long userId = JWTUtil.getUserId(claims);   // 统一走工具方法：Number→longValue，杜绝窄化溢出
             UserDO currentUser = null;
             if (userId != null) {
-                /*
-                 * 令牌吊销校验：改密前签发的旧 token 立即失效（不等自然过期）。
-                 * 比较签发时间而非拉黑键，是为了不误伤改密后立刻重新登录拿到的新 token。
-                 * Redis 不可用时 getRevokedBefore 返回 null → 按无吊销放行（fail-open）。
-                 */
-                Long revokedBefore = tokenRevocationService.getRevokedBeforeEpochSecond(userId);
-                // 严格小于（不是 <=）：JWT 的 iat 只有秒级精度，同一秒内无法区分
-                // "改密前签发"与"改密后重登"。取 < 的取舍：
-                //   宁可漏——与改密同秒签发的旧 token 逃过吊销、活到自然过期（≤1h，
-                //   等同于没做吊销时的基线，窗口从"任何 token 1h"缩到"仅同秒 token"）；
-                //   不可误杀——用 <= 时，用户改密后同一秒内重新登录，新 token 会被
-                //   自己的吊销记录踢掉，表现为"改完密码立刻被登出"，不可接受。
-                // 人工操作下"login 与改密同秒"概率极低；要彻底消除需 token 加 jti+黑名单。
-                if (revokedBefore != null && claims.getIssuedAt() != null
-                        && claims.getIssuedAt().getTime() / 1000 < revokedBefore) {
-                    log.info("改密后旧令牌已吊销: userId={}, url={}", userId, request.getRequestURL());
-                    writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
-                            "密码已修改，请重新登录");
-                    return false;
-                }
                 currentUser = userMapper.selectById(userId);
                 if (currentUser == null) {
                     writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                             GlobalErrorCodeConstants.UNAUTHORIZED.getMsg());
                     return false;
                 }
+                /*
+                 * 状态校验放在代数校验之前：两者都会拒绝，但给用户的提示应尽可能具体。
+                 * 账号被停用时，用户最需要知道的是"我被停用了"（能去联系管理员），
+                 * 而不是笼统的"登录状态已失效"（用户只会以为是登录过期，反复重登）。
+                 * 因此先判状态，命中就用「账号已停用」的具体文案。
+                 */
                 if (!UserStatusEnum.isActive(currentUser.getStatus())) {
                     log.info("已停用账号访问被拦截: userId={}, url={}", userId, request.getRequestURL());
                     writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
                             ServiceErrorCodeConstants.USER_DISABLED.getMsg());
+                    return false;
+                }
+                /*
+                 * 令牌代数校验：改密 / 停用 / 降级时 user.token_version 会 +1，
+                 * 因此"签发时的代数"与"库中当前代数"不一致，就说明这张票已被主动作废。
+                 *
+                 * 放在状态校验之后：走到这里说明账号本身是启用的，
+                 * 那么代数不符就只剩"改过密码"或"曾停用后又被启用"两种情况，
+                 * 统一提示"登录状态已失效，请重新登录"是准确的——
+                 * 用户按提示重新登录即可，不会被误导为账号有问题。
+                 *
+                 * 相比旧方案（Redis 记吊销时刻 + 比对 token 的 iat 秒级时间戳）：
+                 *   1) 精确相等比较，没有"同秒签发逃过吊销"的精度漏洞；
+                 *   2) 不引入 Redis 依赖，也就不用为 Redis 故障设计 fail-open/fail-close；
+                 *   3) 版本号搭上面这次 selectById 顺路取回，零额外查询——反而比旧方案少一次 Redis 往返；
+                 *   4) 改密、停用、降级共用同一机制，不必各写一套判断。
+                 *
+                 * 兼容性：版本号上线前签发的老 token 没有 ver claim，
+                 * JWTUtil.getTokenVersion 按 0 处理，而 user.token_version 列默认值也是 0，
+                 * 因此上线瞬间不会把在途会话全部踢掉。
+                 */
+                Integer tokenVer = JWTUtil.getTokenVersion(claims);
+                int dbVer = currentUser.getTokenVersion() == null ? 0 : currentUser.getTokenVersion();
+                if (tokenVer != null && tokenVer != dbVer) {
+                    log.info("令牌代数已失效: userId={}, tokenVer={}, dbVer={}, url={}",
+                            userId, tokenVer, dbVer, request.getRequestURL());
+                    writeJson(request, response, GlobalErrorCodeConstants.UNAUTHORIZED.getCode(),
+                            "登录状态已失效，请重新登录");
                     return false;
                 }
             }

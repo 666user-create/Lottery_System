@@ -46,8 +46,24 @@ public class UserServiceImpl implements UserService {
     private UserMapper userMapper;
     @Autowired
     private VerificationCodeService verificationCodeService;
-    @Autowired
-    private org.example.lottery_system.service.TokenRevocationService tokenRevocationService;
+
+    /**
+     * 统一签发入口：所有 token 必须从这里出。
+     *
+     * <p>为什么收口：此前密码登录与验证码登录各自复制了一份 claim 组装代码，
+     * 加字段时容易改一处漏一处（本项目已多次吃过"两处不一致"的亏）。
+     * 现在 ver（令牌代数）只在这一个方法里写入，保证两条登录通道签发的 token 结构完全一致。
+     */
+    private String issueToken(UserDO userDo) {
+        Map<String, Object> claim = new HashMap<>();
+        claim.put("id", userDo.getId());
+        claim.put("identity", userDo.getIdentity());
+        // 令牌代数：拦截器每请求与 user.token_version 比对，不一致即 401。
+        // 老数据为 0；为空时按 0 兜底，避免历史行 NULL 导致拆箱 NPE。
+        claim.put(JWTUtil.CLAIM_TOKEN_VERSION,
+                userDo.getTokenVersion() == null ? 0 : userDo.getTokenVersion());
+        return JWTUtil.genJwt(claim);
+    }
 
     @Override
     public UserRegisterDTO register(UserRegisterParam param) {
@@ -178,11 +194,8 @@ public class UserServiceImpl implements UserService {
             throw new ServiceException(ServiceErrorCodeConstants.VERIFICATION_CODE_ERROR);
         }
         verificationCodeService.clearVerificationCode(loginParam.getLoginMobile(), VerificationSceneEnum.LOGIN);
-        //返回登录信息
-        Map<String, Object> claim = new HashMap<>();
-        claim.put("id", userDo.getId());
-        claim.put("identity", userDo.getIdentity());
-        String token = JWTUtil.genJwt(claim);
+        //返回登录信息（统一从 issueToken 出，含 ver 令牌代数）
+        String token = issueToken(userDo);
 
         UserLoginDTO userLoginDTO = new UserLoginDTO();
         userLoginDTO.setToken(token);
@@ -218,11 +231,8 @@ public class UserServiceImpl implements UserService {
             //密码校验不通过
             throw new ServiceException(ServiceErrorCodeConstants.PASSWORD_ERROR);
         }
-        //返回登录信息
-        Map<String, Object> claim = new HashMap<>();
-        claim.put("id", userDo.getId());
-        claim.put("identity", userDo.getIdentity());
-        String token = JWTUtil.genJwt(claim);
+        //返回登录信息（统一从 issueToken 出，含 ver 令牌代数）
+        String token = issueToken(userDo);
 
         UserLoginDTO userLoginDTO = new UserLoginDTO();
         userLoginDTO.setToken(token);
@@ -364,6 +374,12 @@ public class UserServiceImpl implements UserService {
         }
 
         userMapper.updateStatus(targetUserId, targetStatus.name());
+        // 停用时令牌代数 +1：让该账号已签发的 token 立即失效。
+        // 否则"停用"只拦住新的登录请求，在线会话仍能继续用满 1 小时——停用等于打折执行。
+        // 启用（ACTIVE）不需要递增：此时该用户本来就没有有效 token。
+        if (targetStatus == UserStatusEnum.DISABLED) {
+            userMapper.bumpTokenVersion(targetUserId);
+        }
         log.info("账号状态变更: operatorId={} targetId={} -> {}", operatorId, targetUserId, targetStatus);
     }
 
@@ -425,10 +441,12 @@ public class UserServiceImpl implements UserService {
         // 4. 落库
         userMapper.updatePassword(userId, DigestUtil.sha256Hex(param.getNewPassword()));
         consumeVerificationCode(userDo, param);
-        // 5. 吊销改密前签发的旧 token（Redis 记吊销时刻，拦截器比对签发时间）。
-        //    放在落库之后：密码没改成成功就不会误踢自己的线。
-        tokenRevocationService.revokeTokensIssuedBefore(userId);
-        log.info("用户 {} 修改密码成功，旧令牌已吊销", userId);
+        // 5. 令牌代数 +1：改密前签发的所有 token 立即失效（拦截器比对 ver 时返回 401）。
+        //    放在落库之后：密码没改成功就不会误踢自己的会话。
+        //    与旧方案（Redis 记吊销时刻 + 比对 iat）相比：精确无秒级歧义、少一次 Redis 往返、
+        //    且与"停用"共用同一机制。
+        userMapper.bumpTokenVersion(userId);
+        log.info("用户 {} 修改密码成功，旧令牌已失效（token_version 已递增）", userId);
         return true;
     }
 

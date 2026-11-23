@@ -96,46 +96,29 @@
       sending = true;
 
       try {
-        // 用 fetch 流式读取 SSE(EventSource 只支持 GET，我们的接口是 POST，所以用 fetch)
+        // 同步返回：接口直接给完整回答文本，不再是 SSE 逐块推送。
+        // 这里同时处理两种失败形态：HTTP 非 200（拦截器 401/403）与 HTTP 200 但 body.code != 200（业务失败）。
         const resp = await fetch('/api/ai/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'token': token },
           body: JSON.stringify({ message: text, sessionId: sessionId })
         });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
         aiBubble.classList.remove('typing');
-        aiBubble.textContent = '';
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          // SSE：事件之间以空行分隔（兼容 CRLF）
-          const events = buffer.split(/\r?\n\r?\n/);
-          buffer = events.pop();
-          for (const ev of events) {
-            // 一个事件可以包含多行 data:（内容里的换行会拆成多行），按规范用 \n 拼回
-            const dataLines = [];
-            for (const line of ev.split(/\r?\n/)) {
-              if (!line.startsWith('data:')) continue;
-              let payload = line.slice(5);
-              // 规范：data: 之后若有一个空格则去掉，且只去掉一个
-              // （原实现用 .trim() 会把分词之间有意义的前后空格一并吃掉）
-              if (payload.startsWith(' ')) payload = payload.slice(1);
-              dataLines.push(payload);
-            }
-            if (dataLines.length === 0) continue;
-            const payload = dataLines.join('\n');
-            if (payload === '[DONE]') continue;
-            aiBubble.textContent += payload;
-          }
-          document.getElementById('chatBody').scrollTop =
-            document.getElementById('chatBody').scrollHeight;
+        if (!resp.ok) {
+          // 未登录/无权限等：响应体是拦截器手写的 JSON，尽量取 message
+          let msg = 'HTTP ' + resp.status;
+          try { const j = await resp.json(); if (j && j.message) msg = j.message; } catch (_) {}
+          throw new Error(msg);
         }
+
+        const result = await resp.json();
+        if (!result || result.code !== 200) {
+          throw new Error((result && result.message) || '服务异常');
+        }
+        aiBubble.textContent = result.data || '';
+        document.getElementById('chatBody').scrollTop =
+          document.getElementById('chatBody').scrollHeight;
       } catch (e) {
         aiBubble.textContent = '小东：网络开小差了，请重试～(' + e.message + ')';
       } finally {

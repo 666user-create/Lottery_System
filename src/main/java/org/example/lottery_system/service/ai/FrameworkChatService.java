@@ -11,7 +11,6 @@ import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvi
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -39,6 +38,15 @@ public class FrameworkChatService {
     /** 转人工触发词 */
     private static final List<String> HANDOVER_KEYWORDS = Arrays.asList(
             "转人工", "人工客服", "人工服务", "真人客服", "真人", "投诉", "找客服", "人工", "客服电话");
+
+    /**
+     * 命中违规内容时对用户返回的固定句式。
+     *
+     * <p>设计取舍：不再对命中词打码后返回剩余内容，而是整段替换。
+     * 原因是打码只遮蔽个别词、其余内容仍会输出，无法保证"违规请求不得到实质回答"；
+     * 固定句式既明确告知无法回答，也不会透出任何模型生成内容。
+     */
+    private static final String BLOCKED_REPLY = "抱歉，这个问题我无法回答";
 
     private static final String SYSTEM_PROMPT = """
             你是"小东",抽奖系统的智能客服助手,语气热情友好,适当使用表情符号。
@@ -87,11 +95,11 @@ public class FrameworkChatService {
      */
     public String chat(String userMessage, String sessionId, Long userId) {
         try {
-            // 1. 输入侧敏感词过滤
+            // 1. 输入侧敏感词过滤：命中直接返回固定句式，问题根本不送模型
             List<String> hits = sensitiveWordFilter.findHits(userMessage);
             if (!hits.isEmpty()) {
                 log.warn("用户输入命中敏感词 {} 个,已拦截", hits.size());
-                return "您的问题包含不当内容,请调整后再试～ 如需帮助可以转接人工客服。";
+                return BLOCKED_REPLY;
             }
 
             // 2. 转人工意图识别
@@ -126,74 +134,20 @@ public class FrameworkChatService {
                 return "小东:嗯...让我想想～";
             }
 
-            // 4. 输出侧敏感词打码
-            return sensitiveWordFilter.replace(reply, '*');
+            // 4. 输出侧敏感词检查：命中则整段替换为固定句式，不返回原文。
+            //    与旧实现的区别：以前是把命中词打码成 *（剩余内容仍会输出），
+            //    现在需求是整段不予回答，因此直接返回固定句式，避免残留内容被误读。
+            if (!sensitiveWordFilter.findHits(reply).isEmpty()) {
+                log.warn("模型回复命中敏感词，已替换为固定句式");
+                return BLOCKED_REPLY;
+            }
+            return reply;
         } catch (Exception e) {
             log.error("框架化对话异常", e);
             return "小东:抱歉,我暂时无法回答,请稍后再试～(" + e.getMessage() + ")";
         }
     }
 
-    /**
-     * SSE 流式接口：真流式（逐 token 透传），而非"先完整回答再按句切"。
-     *
-     * <p>2026-11 由伪流式改造而来。改造前实现是 {@code chat(...)} 拿到完整回答后
-     * 按句号切分再依次返回，用户看到第一句的等待时间 = 整段生成时间（~1.5s）。
-     * 现在走 {@code ChatClient...stream().content()}，首 token 到达即推送（~0.3s）。
-     *
-     * <p>三条链路约束的处理：
-     * <ol>
-     *   <li><b>输入敏感词 / 转人工</b>：仍是调用模型前的确定性判断，直接返回单块文本，
-     *       不必进入流式链路（这两条本来就没有"边生成边输出"的必要）。</li>
-     *   <li><b>输出敏感词打码</b>：流式下无法等全文再 replace，改用
-     *       {@link org.example.lottery_system.service.ai.safety.SensitiveWordFilter.StreamingMasker}
-     *       ——保留末尾 maxWordLength-1 字符延迟输出，避免跨 chunk 的敏感词漏检。</li>
-     *   <li><b>异常兜底</b>：{@code onErrorResume} 返回友好话术，避免前端 loading 卡死。</li>
-     * </ol>
-     */
-    public Flux<String> chatStream(String userMessage, String sessionId, Long userId) {
-        // 1. 输入侧敏感词：命中直接拒答（不入流式链路）
-        List<String> hits = sensitiveWordFilter.findHits(userMessage);
-        if (!hits.isEmpty()) {
-            log.warn("用户输入命中敏感词 {} 个,已拦截", hits.size());
-            return Flux.just("您的问题包含不当内容,请调整后再试～ 如需帮助可以转接人工客服。");
-        }
-
-        // 2. 转人工意图：建工单 + 固定话术（不入流式链路）
-        if (containsHandoverKeyword(userMessage)) {
-            createHandover(userMessage, sessionId, userId);
-            return Flux.just("好的,已为您转接人工客服,请稍候,客服人员会尽快联系您～ 🙋‍♀️");
-        }
-
-        // 3. 流式调用模型：Advisor 链（RAG + 记忆 + 工具）由框架透明处理
-        ChatClient.ChatClientRequestSpec spec = chatClient.prompt()
-                .system(buildSystemPrompt(userId))
-                .user(userMessage)
-                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, sessionId));
-
-        Map<String, Object> toolContext = new HashMap<>();
-        if (userId != null) {
-            toolContext.put("userId", userId);
-        } else {
-            toolContext.put("anonymous", Boolean.TRUE);
-        }
-        spec = spec.toolContext(toolContext);
-
-        // 4. 逐 token 输出 + 流式敏感词打码
-        SensitiveWordFilter.StreamingMasker masker = sensitiveWordFilter.newStreamingMasker();
-        return spec.stream()
-                .content()
-                .map(masker::drain)                      // 边界安全输出（可能返回空串）
-                .filter(s -> !s.isEmpty())               // 丢弃空块，避免前端收到空事件
-                .concatWith(Flux.defer(() -> {           // 流结束补吐缓冲尾巴
-                    String tail = masker.flush();
-                    return tail.isEmpty() ? Flux.<String>empty() : Flux.just(tail);
-                }))
-                .onErrorResume(e -> {                    // 异常兜底：不要静默中断
-                    log.error("流式对话异常", e);
-                    return Flux.just("小东:抱歉,我暂时无法回答,请稍后再试～(" + e.getMessage() + ")");
-                });
-    }
 
     /**
      * 按登录状态动态生成 System Prompt

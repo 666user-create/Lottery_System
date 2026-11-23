@@ -124,7 +124,7 @@ class TestDegradation:
             faq_cleanup(resp.data)
 
         # 关键词兜底仍应能召回（RAG 链路降级可用性）
-        chat = admin_client.post("/api/ai/chat/sync",
+        chat = admin_client.post("/api/ai/chat",
                                  json_body={"message": "降级测试抽奖规则", "sessionId": "qa_auto_degrade"},
                                  timeout=config.AI_TIMEOUT)
         assert_success(chat, hint="[RAG 降级] 关键词兜底链路应可用")
@@ -135,7 +135,7 @@ class TestDegradation:
         依赖异常姿态：向 AI 接口发送超长/异常输入，应返回可读文案而非 500 堆栈。
         能抓到：外部 API 异常直穿为 500 + 内部细节。
         """
-        resp = anon_client.post("/api/ai/chat/sync",
+        resp = anon_client.post("/api/ai/chat",
                                 json_body={"message": "\u0000\u0001\u0002 非法控制字符测试"},
                                 timeout=config.AI_TIMEOUT)
         print(f"    [定性] AI 非法字符输入 → HTTP={resp.status} code={resp.code}")

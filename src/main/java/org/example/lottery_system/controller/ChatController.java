@@ -6,23 +6,23 @@ import org.example.lottery_system.service.ai.FrameworkChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 
 import java.util.Map;
 
 /**
- * 智能客服对话接口 — SSE 流式响应
+ * 智能客服对话接口 — 同步返回完整回答。
  *
- * <p>2026-11 重构：原先存在三套并行实现（XiaoDongChatService 手写智能体 /
- * AiCustomerService simple 手写 RAG / FrameworkChatService 框架化），两套 RAG 以
- * app.rag.mode 切换。现统一为 framework 一套（RAG Advisor + Jdbc 会话记忆 +
- * MCP 工具 + 敏感词过滤 + 相似度阈值），另两套已删除，避免同一逻辑维护两份、
- * 且切换模式会丢会话记忆（simple 存 Redis、framework 存 MySQL）。
+ * <p>2026-11 起改为同步：原先 /api/ai/chat 返回 SSE 逐 token 推送、
+ * 另有一个 /api/ai/chat/sync 备用端点。现在需求是"命中违禁词就返回固定句式"，
+ * 内容安全必须在拿到完整回答后统一判定（流式下无法等全文再判，只能边流边打码，
+ * 而打码不满足需求）。因此统一为同步返回，删掉 SSE 端点与冗余的 /sync 端点。
  *
- * <p>若将来需要对照历史实现，见 git 历史提交 95aeb88 之前。
+ * <p>前端（chat.html / user-lobby.html）相应改为 fetch + resp.json()，逻辑从
+ * "按 SSE 帧解析并逐块追加"简化为"取 data 字段一次性渲染"。
+ *
+ * <p>历史上还并存过 XiaoDongChatService（手写智能体）与 AiCustomerService
+ * （simple 模式手写 RAG），均已删除，见 git 提交 ffabb11 之前。
  */
 @RestController
 @RequestMapping("/api")
@@ -35,37 +35,21 @@ public class ChatController {
     private FrameworkChatService frameworkChatService;
 
     /**
-     * RAG 智能客服（SSE 流式）
+     * RAG 智能客服（同步）
      * POST /api/ai/chat  body: {"message":"怎么抽奖","sessionId":"sess-001"}
      * header 可选带 token（用于工具取"当前登录用户"）
+     *
+     * 返回 data 为完整回答文本。命中敏感词时 data 为固定提示语，不返回原文。
      */
-    @PostMapping(value = "/ai/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> aiChat(@RequestBody Map<String, String> body,
-                                                @RequestHeader(value = "token", required = false) String token) {
+    @PostMapping("/ai/chat")
+    public CommonResult<String> aiChat(@RequestBody Map<String, String> body,
+                                       @RequestHeader(value = "token", required = false) String token) {
         String message = body.getOrDefault("message", "");
         String sessionId = body.getOrDefault("sessionId", "");
         log.info("智能客服收到消息: {}", message);
         if (message.isBlank()) {
-            return Flux.just(ServerSentEvent.<String>builder()
-                    .data("小东：你好！请问有什么可以帮你的吗？😊").build());
+            return CommonResult.success("小东：你好！请问有什么可以帮你的吗？😊");
         }
-        Long userId = parseUserId(token);
-        return frameworkChatService.chatStream(message, sessionId, userId)
-                .map(chunk -> ServerSentEvent.<String>builder().data(chunk).build())
-                .concatWithValues(ServerSentEvent.<String>builder().data("[DONE]").build())
-                .onErrorResume(e -> {
-                    log.error("SSE 流式输出异常", e);
-                    return Flux.just(ServerSentEvent.<String>builder()
-                            .data("小东：回答生成中断了，请重试～（" + e.getMessage() + "）").build());
-                });
-    }
-
-    /** 同步版（备用）POST /api/ai/chat/sync */
-    @PostMapping("/ai/chat/sync")
-    public CommonResult<String> aiChatSync(@RequestBody Map<String, String> body,
-                                           @RequestHeader(value = "token", required = false) String token) {
-        String message = body.getOrDefault("message", "");
-        String sessionId = body.getOrDefault("sessionId", "");
         Long userId = parseUserId(token);
         return CommonResult.success(frameworkChatService.chat(message, sessionId, userId));
     }

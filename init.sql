@@ -213,6 +213,7 @@ CREATE TABLE `user` (
   `password` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '登录密码',
   `identity` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL COMMENT '用户身份',
   `status` varchar(32) NOT NULL DEFAULT 'ACTIVE',
+  `token_version` int NOT NULL DEFAULT '0' COMMENT '令牌代数:改密/停用/降级时+1,使旧token立即失效',
   `receiver_name` varchar(50) DEFAULT NULL COMMENT '收货人姓名',
   `receiver_phone` varchar(255) DEFAULT NULL COMMENT '收货人手机号(EncryptTypeHandler 加密存储)',
   `receiver_address` varchar(500) DEFAULT NULL COMMENT '收货地址',

@@ -813,33 +813,33 @@
             headers: { 'Content-Type': 'application/json', 'token': token },
             body: JSON.stringify({ message: msg, sessionId: sessionId })
         }).then(function(response) {
+            return response.json().then(function(result) {
+                return { ok: response.ok, status: response.status, result: result };
+            }).catch(function() {
+                // 响应体不是 JSON（如网关错误页）
+                return { ok: response.ok, status: response.status, result: null };
+            });
+        }).then(function(r) {
             $('#' + loadingId).remove();
-            var reader = response.body.getReader();
-            var decoder = new TextDecoder();
-            var botMsgDiv = null;
-            var fullText = '';
-
-            function read() {
-                reader.read().then(function(result) {
-                    if (result.done) { return; }
-                    var text = decoder.decode(result.value, { stream: true });
-                    var lines = text.split('\n');
-                    for (var i = 0; i < lines.length; i++) {
-                        var line = lines[i];
-                        if (line.startsWith('data:')) {
-                            var chunk = line.substring(5).trim();
-                            if (chunk === '[DONE]') continue;
-                            fullText += chunk;
-                            if (!botMsgDiv) {
-                                botMsgDiv = $('<div class="msg bot"></div>');
-                                messages.append(botMsgDiv);
-                            }
-                            botMsgDiv.text(fullText);
-                            messages.scrollTop(messages[0].scrollHeight);
-                        }
-                    }
-                    read();
-                });
+            // 同步接口：一次拿到完整回答，不再逐块追加
+            var body = r.result;
+            if (!r.ok) {
+                var msgText = (body && body.message) ? body.message : ('HTTP ' + r.status);
+                throw new Error(msgText);
+            }
+            if (!body || body.code !== 200) {
+                throw new Error((body && body.message) || '服务异常');
+            }
+            var botMsgDiv = $('<div class="msg bot"></div>');
+            messages.append(botMsgDiv);
+            botMsgDiv.text(body.data || '');
+            messages.scrollTop(messages[0].scrollHeight);
+        }).catch(function(err) {
+            $('#' + loadingId).remove();
+            var tip = (err && err.message) ? err.message : '请重试～';
+            messages.append($('<div class="msg bot">').text('小东：' + tip));
+            messages.scrollTop(messages[0].scrollHeight);
+        });
             }
             read();
         }).catch(function() {

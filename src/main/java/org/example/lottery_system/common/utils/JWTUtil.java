@@ -26,9 +26,11 @@ public class JWTUtil {
     private static final SecretKey SECRET_KEY =
             Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
     /**
-     * 过期时间(单位: 毫秒)。
-     * 注意：TokenRevocationService 的吊销记录 TTL 引用此值——
-     * 「记录保留时长 ≥ token 最长存活」这个不变式靠共用这一个常量维持，改这里需同步检查那边。
+     * 过期时间(单位: 毫秒)，1 小时。
+     *
+     * 注：早期版本另有一套「Redis 记录吊销时刻 + 比对 iat」的旧 token 失效方案，
+     * 其记录 TTL 引用本常量维持「保留时长 ≥ token 最长存活」的不变式。
+     * 该方案已由 token_version（令牌代数）取代并删除，现在本常量只决定 token 自身寿命。
      */
     public static final long EXPIRATION = 60 * 60 * 1000;
 
@@ -88,5 +90,31 @@ public class JWTUtil {
      */
     public static Long getUserIdFromToken(String jwtToken) {
         return getUserId(parseJWT(jwtToken));
+    }
+
+    /** claims 中令牌版本号的键名，签发与校验两处共用，避免字符串写错不同步 */
+    public static final String CLAIM_TOKEN_VERSION = "ver";
+
+    /**
+     * 取令牌版本号（令牌代数）。
+     *
+     * <p>返回语义：
+     * <ul>
+     *   <li>{@code null} —— claims 本身为空（未登录/验签失败），调用方应直接拒绝</li>
+     *   <li>{@code 0} —— token 里没有 ver claim。这是**版本号机制上线前签发的老 token**，
+     *       按初始代数 0 处理，与 user.token_version 的列默认值一致，
+     *       从而保证上线瞬间不会把所有在途会话踢掉</li>
+     *   <li>其他整数 —— 该 token 签发时的代数</li>
+     * </ul>
+     *
+     * <p>只认 Number（JJWT 会把整数还原成 Integer/Long），非数值一律按 0 处理：
+     * 宁可让畸形 token 走"版本不符"被拒，也不抛异常打断请求。
+     */
+    public static Integer getTokenVersion(Claims claims) {
+        if (claims == null) {
+            return null;
+        }
+        Object ver = claims.get(CLAIM_TOKEN_VERSION);
+        return ver instanceof Number ? ((Number) ver).intValue() : 0;
     }
 }

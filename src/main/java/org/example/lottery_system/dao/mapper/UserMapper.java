@@ -97,6 +97,19 @@ public interface UserMapper {
     int updateStatus(@Param("id") Long id, @Param("status") String status);
 
     /*
+     * 令牌版本 +1：使该用户已签发的全部 token 立即失效。
+     *
+     * 用 SQL 自增（token_version + 1）而不是"先查再写"：后者在并发下会丢更新
+     * （两个请求都读到 3、都写回 4，实际应为 5），与验证码计数用 INCR 同理。
+     *
+     * 调用时机：改密码、停用账号、将来若支持改身份（降级）也在此处递增。
+     * 递增后拦截器比对 claims.ver != db.token_version 直接 401，
+     * 无需再依赖 Redis 时间戳，也不受秒级精度限制。
+     */
+    @Update("update user set token_version = token_version + 1 where id = #{id}")
+    int bumpTokenVersion(@Param("id") Long id);
+
+    /*
      * 保存收货地址(领奖履约用)。
      * receiverPhone 是 Encrypt 类型,由 EncryptTypeHandler 加密后落库,与 phone_number 一致。
      */
